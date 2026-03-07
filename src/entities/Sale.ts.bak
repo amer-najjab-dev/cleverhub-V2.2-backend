@@ -1,0 +1,485 @@
+import { 
+  Entity, 
+  PrimaryGeneratedColumn, 
+  Column, 
+  CreateDateColumn, 
+  UpdateDateColumn, 
+  ManyToOne, 
+  OneToMany, 
+  JoinColumn,
+  BeforeInsert,
+  BeforeUpdate
+} from 'typeorm';
+import { Client } from './Client';
+import { User } from './User';
+import { SaleItem } from './SaleItem';
+import { Payment } from './Payment';
+import { Refund } from './Refund';
+import { Debt } from './Debt';
+
+// ENUM para estados de pago - Manteniendo compatibilidad con strings existentes
+export enum PaymentStatus {
+  PENDING = 'pending',
+  PARTIAL = 'partial',
+  PAID = 'paid',
+  CANCELLED = 'cancelled'
+}
+
+// ENUM para métodos de pago - Para futura validación
+export enum PaymentMethod {
+  CASH = 'cash',
+  CARD = 'card',
+  TRANSFER = 'transfer',
+  CREDIT = 'credit',
+  MIXED = 'mixed',
+  CHECK = 'check',
+  OTHER = 'other'
+}
+
+// Interfaz para el detalle de métodos de pago en el JSON
+export interface PaymentMethodDetail {
+  method: string;
+  amount: number;
+  timestamp?: Date;
+  reference?: string;
+  card_last4?: string;
+  card_brand?: string;
+}
+
+@Entity('sales')
+export class Sale {
+  // ============================================
+  // 1. CAMPOS EXISTENTES - SE MANTIENEN INTACTOS
+  // ============================================
+  
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ name: 'sale_number', unique: true })
+  saleNumber: string;
+
+  @Column({ name: 'client_id', nullable: true })
+  clientId: number;
+
+  @Column({ name: 'user_id' })
+  userId: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  subtotal: number;
+
+  @Column({ name: 'discount_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  discountAmount: number;
+
+  @Column({ name: 'discount_type', nullable: true })
+  discountType: string;
+
+  @Column({ name: 'discount_percentage', type: 'decimal', precision: 5, scale: 2, nullable: true })
+  discountPercentage: number;
+
+  @Column({ name: 'tax_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  taxAmount: number;
+
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  total: number;
+
+  @Column({ name: 'paid_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  paidAmount: number;
+
+  @Column({ name: 'change_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
+  changeAmount: number;
+
+  @Column({ 
+    name: 'payment_method', 
+    nullable: true,
+    type: 'varchar'  // Se mantiene varchar en BD pero usamos enum en TypeScript
+  })
+  paymentMethod: PaymentMethod;
+
+  @Column({ 
+    name: 'payment_status', 
+    default: 'pending',
+    type: 'varchar'
+  })
+  paymentStatus: string;
+
+  @Column({ name: 'sale_status', default: 'completed' })
+  saleStatus: string;
+
+  @Column({ type: 'text', nullable: true })
+  notes: string;
+
+  // Campos médicos (regulatorios) - SE MANTIENEN
+  @Column({ name: 'adult_flag', nullable: true })
+  adultFlag: boolean;
+
+  @Column({ name: 'pregnant_flag', nullable: true })
+  pregnantFlag: boolean;
+
+  @Column({ name: 'lactating_flag', nullable: true })
+  lactatingFlag: boolean;
+
+  @Column({ name: 'chronic_condition_flag', nullable: true })
+  chronicConditionFlag: boolean;
+
+  @Column({ name: 'usual_medication_flag', nullable: true })
+  usualMedicationFlag: boolean;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+
+  // ============================================
+  // 2. NUEVOS CAMPOS PARA SISTEMA MULTIMÉTODO
+  // ============================================
+
+  /**
+   * Monto total recibido del cliente (suma de todos los métodos)
+   * Se sincronizará con paid_amount para mantener compatibilidad
+   */
+  @Column({ 
+    name: 'amount_received', 
+    type: 'decimal', 
+    precision: 10, 
+    scale: 2, 
+    default: 0,
+    comment: 'Monto total recibido (suma de todos los métodos de pago)'
+  })
+  amountReceived: number;
+
+  /**
+   * Monto aplicado al total (solo métodos líquidos: efectivo, tarjeta, transferencia)
+   * Este es el campo clave para el cálculo FIFO de deudas
+   */
+  @Column({ 
+    name: 'amount_applied', 
+    type: 'decimal', 
+    precision: 10, 
+    scale: 2, 
+    default: 0,
+    comment: 'Monto aplicado al total (solo métodos líquidos)'
+  })
+  amountApplied: number;
+
+  /**
+   * Monto pendiente por pagar (total - amount_applied)
+   * Columna física gestionada por el Service (NO virtual)
+   */
+  @Column({ 
+    name: 'amount_pending', 
+    type: 'decimal', 
+    precision: 10, 
+    scale: 2, 
+    default: 0,
+    comment: 'Monto pendiente (calculado: total - amount_applied)'
+  })
+  amountPending: number;
+
+  /**
+   * Indicador de si la deuda asociada a esta venta está completamente pagada
+   * Útil para queries de reportes y seguimiento
+   */
+  @Column({ 
+    name: 'is_debt_paid', 
+    default: false,
+    comment: 'Indica si la deuda generada por esta venta está completamente pagada'
+  })
+  isDebtPaid: boolean;
+
+  /**
+   * Campo legacy: saldo pendiente (mantener para compatibilidad)
+   * Se sincronizará con amount_pending
+   */
+  @Column({ 
+    name: 'saldo_pendiente', 
+    type: 'decimal', 
+    precision: 10, 
+    scale: 2, 
+    default: 0,
+    comment: 'Campo legacy - sincronizado con amount_pending'
+  })
+  saldoPendiente: number;
+
+  /**
+   * Métodos de pago utilizados (JSON array para múltiples métodos)
+   * Ejemplo: '[{"method": "cash", "amount": 50}, {"method": "card", "amount": 100}]'
+   */
+  @Column({ 
+    name: 'payment_methods_json', 
+    type: 'jsonb', 
+    nullable: true,
+    comment: 'Array JSON con los métodos de pago utilizados'
+  })
+  paymentMethodsJson: PaymentMethodDetail[];
+
+  // ============================================
+  // 3. RELACIONES
+  // ============================================
+
+  // Relaciones existentes
+  @ManyToOne(() => Client, client => client.sales, { onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'client_id' })
+  client: Client;
+
+  @ManyToOne(() => User, user => user.sales)
+  @JoinColumn({ name: 'user_id' })
+  user: User;
+
+  @OneToMany(() => SaleItem, saleItem => saleItem.sale, { cascade: true })
+  items: SaleItem[];
+
+  @OneToMany(() => Payment, payment => payment.sale, { cascade: true })
+  payments: Payment[];
+
+  @OneToMany(() => Refund, refund => refund.sale)
+  refunds: Refund[];
+
+  // Nueva relación con Debt (una venta puede generar múltiples deudas)
+  @OneToMany(() => Debt, debt => debt.sale, { cascade: true })
+  debts: Debt[];
+
+  // ============================================
+  // 4. HOOKS PARA VALIDACIÓN Y SINCRONIZACIÓN
+  // ============================================
+
+  /**
+   * Hook para validar y sincronizar campos antes de insertar/actualizar
+   */
+  @BeforeInsert()
+  @BeforeUpdate()
+  validateAndSync() {
+    // 1. Validar Regla de Oro (solo para nuevas ventas)
+    if (!this.id) {
+      this.validateGoldenRule();
+    }
+
+    // 2. Sincronizar campos legacy
+    this.syncLegacyFields();
+
+    // 3. Calcular campos derivados
+    this.calculateDerivedFields();
+
+    // 4. Validar pagos mixtos si corresponde
+    if (this.paymentMethod === PaymentMethod.MIXED) {
+      this.validateMixedPayment();
+    }
+
+    // 5. Asegurar que amount_pending sea consistente
+    this.calculateAmountPending();
+  }
+
+  // ============================================
+  // 5. MÉTODOS DE VALIDACIÓN PRIVADOS
+  // ============================================
+
+  /**
+   * Validar la Regla de Oro: Crédito nunca puede crearse como 'paid'
+   */
+  private validateGoldenRule(): void {
+    if (this.paymentMethod === PaymentMethod.CREDIT && 
+        this.paymentStatus === PaymentStatus.PAID) {
+      throw new Error(
+        'Una venta a crédito no puede crearse con estado "Pagado". ' +
+        'Use "Pendiente" o "Parcial" según corresponda.'
+      );
+    }
+  }
+
+  /**
+   * Validar que los pagos mixtos tengan payment_methods_json válido
+   */
+  private validateMixedPayment(): void {
+    if (!this.paymentMethodsJson || this.paymentMethodsJson.length === 0) {
+      throw new Error(
+        'Una venta con método de pago "Mixto" debe tener al menos un método de pago en paymentMethodsJson.'
+      );
+    }
+
+    const totalMixed = this.paymentMethodsJson.reduce((sum, item) => sum + item.amount, 0);
+    if (totalMixed <= 0) {
+      throw new Error(
+        'El total de los métodos de pago mixtos debe ser mayor a cero.'
+      );
+    }
+
+    // Verificar que no haya métodos 'credit' en mixed sin cliente
+    // PERMITIR crédito en pagos mixtos si hay cliente asociado
+    const hasCredit = this.paymentMethodsJson.some(item => 
+      item.method === PaymentMethod.CREDIT
+    );
+    if (hasCredit && !this.clientId) {
+      throw new Error(
+        'Los pagos mixtos que incluyen "Crédito" requieren un cliente asociado a la venta.'
+      );
+    }
+    
+    // Si hay crédito en mixed, ajustar lógica de aplicación
+    // La parte de crédito NO se aplica inmediatamente (va a deuda)
+    // Solo los métodos líquidos se aplican en amountApplied
+  }
+
+  /**
+   * Sincronizar campos legacy con los nuevos
+   */
+  private syncLegacyFields(): void {
+    // Sincronizar amount_received con paid_amount
+    if (this.paymentMethod !== PaymentMethod.MIXED) {
+      if (this.amountReceived > 0 && this.paidAmount === 0) {
+        this.paidAmount = this.amountReceived;
+      } else if (this.paidAmount > 0 && this.amountReceived === 0) {
+        this.amountReceived = this.paidAmount;
+      }
+    }  
+
+
+    // Sincronizar amount_pending con saldo_pendiente
+    if (this.amountPending >= 0) {
+      this.saldoPendiente = this.amountPending;
+    } else if (this.saldoPendiente >= 0) {
+      this.amountPending = this.saldoPendiente;
+    }
+
+    // Si es pago en efectivo y hay cambio, calcular changeAmount
+    if (this.paymentMethod === PaymentMethod.CASH && this.amountReceived > this.total) {
+      this.changeAmount = this.amountReceived - this.total;
+    }
+  }
+
+  /**
+   * Calcular campos derivados automáticamente
+   */
+    private calculateDerivedFields(): void {
+    // Lógica especial para pagos mixtos con crédito
+    if (this.paymentMethod === PaymentMethod.MIXED && this.paymentMethodsJson) {
+      // Calcular amountApplied como suma de métodos líquidos (excluyendo crédito)
+      const liquidMethods = this.paymentMethodsJson.filter(item => 
+        item.method !== PaymentMethod.CREDIT
+      );
+      const creditMethods = this.paymentMethodsJson.filter(item => 
+        item.method === PaymentMethod.CREDIT
+      );
+      
+      // Sumar solo los métodos líquidos
+      this.amountApplied = liquidMethods.reduce((sum, item) => sum + item.amount, 0);
+      
+      console.log("[DEBUG Sale.ts] calculateDerivedFields llamado. ID:", this.id, "Método:", this.paymentMethod);
+      console.log("[DEBUG Sale.ts] amountApplied:", this.amountApplied, "paidAmount antes:", this.paidAmount);
+      
+      // Para ventas mixtas, paidAmount debe ser igual a amountApplied (pagos líquidos)
+      this.paidAmount = this.amountApplied;
+      
+      // Si hay crédito, amountReceived incluye todo, pero amountApplied solo lo líquido
+      if (creditMethods.length > 0) {
+        // Asegurar que amountReceived sea la suma total
+        this.amountReceived = this.paymentMethodsJson.reduce((sum, item) => sum + item.amount, 0);
+      }
+      } else if (this.amountApplied === 0 && this.amountReceived > 0) {
+        // Si no hay amount_applied pero hay amount_received, asumir que es lo mismo
+        // (esto puede sobreescribirse en el servicio para créditos)
+        // Para métodos líquidos, todo lo recibido se aplica
+        if (this.paymentMethod !== PaymentMethod.CREDIT) {
+          this.amountApplied = this.amountReceived;
+        }
+      }
+    
+      // Calcular is_debt_paid
+      this.isDebtPaid = this.amountPending <= 0;
+    }
+
+  // ============================================
+  // 6. MÉTODOS DE AYUDA PÚBLICOS
+  // ============================================
+
+  /**
+   * Método para verificar si el pago está completo
+   */
+  isFullyPaid(): boolean {
+    return this.amountApplied >= this.total;
+  }
+
+  /**
+   * Método para verificar si es una venta a crédito
+   */
+  isCreditSale(): boolean {
+    return this.paymentMethod === PaymentMethod.CREDIT || 
+           this.paymentMethod === PaymentMethod.MIXED || 
+           this.amountPending > 0;
+  }
+
+  /**
+   * Método para obtener el estado de pago como enum
+   */
+  getPaymentStatusEnum(): PaymentStatus {
+    switch (this.paymentStatus?.toLowerCase()) {
+      case 'paid':
+        return PaymentStatus.PAID;
+      case 'partial':
+        return PaymentStatus.PARTIAL;
+      case 'cancelled':
+        return PaymentStatus.CANCELLED;
+      default:
+        return PaymentStatus.PENDING;
+    }
+  }
+
+  /**
+   * Método para establecer estado de pago desde enum
+   */
+  setPaymentStatusEnum(status: PaymentStatus): void {
+    this.paymentStatus = status;
+  }
+
+  /**
+   * Método para calcular automáticamente amount_pending
+   * Se usará desde el Service para garantizar consistencia
+   */
+  calculateAmountPending(): void {
+    this.amountPending = Math.max(0, this.total - this.amountApplied);
+    this.isDebtPaid = this.amountPending === 0;
+    // Sincronizar con saldo_pendiente
+    this.saldoPendiente = this.amountPending;
+  }
+
+  /**
+   * Método para agregar un método de pago al array JSON
+   */
+  addPaymentMethod(method: string, amount: number, reference?: string): void {
+    if (!this.paymentMethodsJson) {
+      this.paymentMethodsJson = [];
+    }
+    
+    this.paymentMethodsJson.push({
+      method,
+      amount,
+      timestamp: new Date(),
+      reference
+    });
+  }
+
+  /**
+   * Obtener la suma total de los métodos de pago en el JSON
+   */
+  getTotalFromPaymentMethods(): number {
+    if (!this.paymentMethodsJson) {
+      return 0;
+    }
+    return this.paymentMethodsJson.reduce((total, item) => total + item.amount, 0);
+  }
+
+  /**
+   * Verificar si la venta tiene métodos de pago mixtos válidos
+   */
+  hasValidMixedPayment(): boolean {
+    if (this.paymentMethod !== PaymentMethod.MIXED) {
+      return true; // No es mixed, no aplica
+    }
+    
+    if (!this.paymentMethodsJson || this.paymentMethodsJson.length === 0) {
+      return false;
+    }
+
+    const total = this.getTotalFromPaymentMethods();
+    return total > 0;
+  }
+}

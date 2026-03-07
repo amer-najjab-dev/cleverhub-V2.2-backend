@@ -1,0 +1,17 @@
+import "reflect-metadata";
+import { DataSource } from "typeorm";
+import { Product } from "./entities/Product";
+
+export const AppDataSource = new DataSource({
+    type: "postgres",
+    host: "/Users/admin/postgres-sockets",
+    port: 5432,
+    username: "cleverhub",
+    password: "password123",
+    database: "cleverhub_db",
+    synchronize: true,
+    logging: true,
+    entities: [Product],
+    migrations: [],
+    subscribers: [],
+});

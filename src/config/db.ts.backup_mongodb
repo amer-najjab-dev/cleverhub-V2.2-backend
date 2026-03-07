@@ -1,0 +1,16 @@
+import mongoose from "mongoose";
+
+const connectDB = async () => {
+  try {
+    // URI desde las variables de entorno
+    const mongoUri = process.env.MONGO_URI || "mongodb://localhost:27017/cleverhub";
+
+    const conn = await mongoose.connect(mongoUri);
+    console.log(`✅ MongoDB conectado: ${conn.connection.host}`);
+  } catch (error) {
+    console.error("❌ Error al conectar con MongoDB:", error);
+    process.exit(1); // salir del proceso si no se conecta
+  }
+};
+
+export default connectDB;

@@ -1,0 +1,28 @@
+# Dependencias
+node_modules/
+
+# Sistema y logs
+.DS_Store
+*.log
+backend.log
+cookies.txt
+cookies_emp.txt
+
+# Configuración y Secretos
+.env
+.env.*
+.env.temp
+ormconfig.json
+
+# Base de Datos (Seguridad Crítica)
+*.sql
+backup_models/
+seed_initial_data.sql
+
+# Scripts de Test y Fixes temporales
+test-*.ts
+test_*.js
+test-*.js
+fix-*.js
+compare_endpoints.py
+check-sales.sql
