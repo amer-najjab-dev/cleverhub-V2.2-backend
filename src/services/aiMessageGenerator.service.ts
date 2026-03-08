@@ -1,3 +1,4 @@
+// backend/src/services/aiMessageGenerator.service.ts
 import { AppDataSource } from '../data-source';
 import { Product } from '../entities/Product';
 import { AIGeneratedMessage } from '../entities/AIGeneratedMessage';
@@ -44,13 +45,16 @@ export class AIMessageGeneratorService {
 
     // Guardar mensajes generados
     for (const msg of messages) {
-      const aiMessage = this.messageRepo.create({
-        tone: msg.tone as any,
-        message: msg.message,
-        productId,
-        pointsCost,
-        createdById: userId || 1
-      });
+      const aiMessage = new AIGeneratedMessage();
+      aiMessage.tone = msg.tone;
+      aiMessage.message = msg.message;
+      aiMessage.productId = productId;
+      // ✅ CORREGIDO: Ahora acepta number | null | undefined
+      aiMessage.pointsCost = pointsCost ?? null;
+      aiMessage.createdBy = userId ?? null;
+      aiMessage.usageCount = 0;
+      aiMessage.likeCount = 0;
+      
       await this.messageRepo.save(aiMessage);
     }
 
@@ -87,7 +91,7 @@ export class AIMessageGeneratorService {
       where: { productId },
       order: { createdAt: 'DESC' },
       take: limit,
-      relations: ['createdBy']
+      relations: ['createdByUser']
     });
   }
 

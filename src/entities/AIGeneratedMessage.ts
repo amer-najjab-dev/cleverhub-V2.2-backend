@@ -21,8 +21,8 @@ export class AIGeneratedMessage {
   @JoinColumn({ name: 'product_id' })
   product: Product;
 
-  @Column({ name: 'points_cost', nullable: true })
-  pointsCost: number;
+  @Column({ name: 'points_cost', nullable: true, type: 'int' })  // ✅ Añadido nullable: true
+  pointsCost: number | null;
 
   @Column({ name: 'usage_count', default: 0 })
   usageCount: number;
@@ -31,7 +31,7 @@ export class AIGeneratedMessage {
   likeCount: number;
 
   @Column({ name: 'created_by', nullable: true })
-  createdBy: number;
+  createdBy: number | null;  // ✅ Cambiado a nullable
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'created_by' })

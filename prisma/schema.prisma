@@ -6,7 +6,8 @@ datasource db {
   provider = "postgresql"
 }
 
-// ========== TABLAS EXISTENTES (mantener) ==========
+// ========== TABLAS EXISTENTES ==========
+
 model alerts {
   id             Int             @id @default(autoincrement())
   alert_type     String?         @db.VarChar(30)
@@ -44,7 +45,7 @@ model client_debts {
   client_id         Int?
   total_debt        Decimal   @default(0) @db.Decimal(10, 2)
   paid_amount       Decimal   @default(0) @db.Decimal(10, 2)
-  pending_amount    Decimal?  @default(dbgenerated("(total_debt - paid_amount)")) @db.Decimal(10, 2)
+  pending_amount    Decimal?  @default(0) @db.Decimal(10, 2)
   last_payment_date DateTime? @db.Timestamp(6)
   status            String?   @default("pending") @db.VarChar(20)
   notes             String?
@@ -54,51 +55,51 @@ model client_debts {
 }
 
 model clients {
-  id                 Int            @id @default(autoincrement())
-  first_name         String         @db.VarChar(100)
-  last_name          String         @db.VarChar(100)
-  email              String?        @unique @db.VarChar(255)
-  phone              String?        @db.VarChar(20)
+  id                 Int       @id @default(autoincrement())
+  first_name         String    @db.VarChar(100)
+  last_name          String    @db.VarChar(100)
+  email              String?   @unique @db.VarChar(255)
+  phone              String?   @db.VarChar(20)
   address            String?
-  dni                String?        @unique @db.VarChar(20)
-  birth_date         DateTime?      @db.Date
+  dni                String?   @unique @db.VarChar(20)
+  birth_date         DateTime? @db.Date
   allergies          String?
   chronic_conditions String?
-  is_pregnant        Boolean?       @default(false)
-  is_lactating       Boolean?       @default(false)
-  loyalty_points     Int?           @default(0)
-  total_purchases    Decimal?       @default(0) @db.Decimal(10, 2)
-  favorite           Boolean?       @default(false)
+  is_pregnant        Boolean?  @default(false)
+  is_lactating       Boolean?  @default(false)
+  loyalty_points     Int?      @default(0)
+  total_purchases    Decimal?  @default(0) @db.Decimal(10, 2)
+  favorite           Boolean?  @default(false)
   notes              String?
-  created_at         DateTime?      @default(now()) @db.Timestamp(6)
-  updated_at         DateTime?      @default(now()) @db.Timestamp(6)
-  last_purchase_date DateTime?      @db.Timestamp(6)
+  created_at         DateTime? @default(now()) @db.Timestamp(6)
+  updated_at         DateTime? @default(now()) @db.Timestamp(6)
+  last_purchase_date DateTime? @db.Timestamp(6)
   client_debts       client_debts[]
   sales              sales[]
 }
 
 model delivery_note_items {
-  id                Int              @id @default(autoincrement())
+  id                Int               @id @default(autoincrement())
   delivery_note_id  Int?
   product_id        Int?
   quantity          Int
-  unit_cost_pph     Decimal          @db.Decimal(10, 2)
-  suggested_ppv     Decimal?         @db.Decimal(10, 2)
-  expiration_date   DateTime         @db.Date
-  batch_number      String?          @db.VarChar(100)
-  subtotal          Decimal?         @default(dbgenerated("((quantity)::numeric * unit_cost_pph)")) @db.Decimal(10, 2)
-  margin_percentage Decimal?         @db.Decimal(5, 2)
+  unit_cost_pph     Decimal           @db.Decimal(10, 2)
+  suggested_ppv     Decimal?          @db.Decimal(10, 2)
+  expiration_date   DateTime          @db.Date
+  batch_number      String?           @db.VarChar(100)
+  subtotal          Decimal?          @default(0) @db.Decimal(10, 2)
+  margin_percentage Decimal?          @db.Decimal(5, 2)
   notes             String?
-  created_at        DateTime?        @default(now()) @db.Timestamp(6)
-  delivery_notes    delivery_notes?  @relation(fields: [delivery_note_id], references: [id], onDelete: Cascade)
-  products          products?        @relation(fields: [product_id], references: [id], onDelete: Restrict)
+  created_at        DateTime?         @default(now()) @db.Timestamp(6)
+  delivery_notes    delivery_notes?   @relation(fields: [delivery_note_id], references: [id], onDelete: Cascade)
+  products          products?         @relation(fields: [product_id], references: [id], onDelete: Restrict)
   inventory_lots    inventory_lots[]
 }
 
 model delivery_notes {
   id                  Int                   @id @default(autoincrement())
   note_number         String                @unique @db.VarChar(50)
-  supplier_id         String?                // CAMBIADO DE Int? a String?
+  supplier_id         String?               
   bl_number           String?               @db.VarChar(100)
   reception_date      DateTime              @db.Date
   reception_time      DateTime?             @db.Time(6)
@@ -141,7 +142,7 @@ model exchange_items {
   quantity       Int
   unit_price_ppv Decimal    @db.Decimal(10, 2)
   unit_price_pph Decimal    @db.Decimal(10, 2)
-  subtotal       Decimal?   @default(dbgenerated("((quantity)::numeric * unit_price_ppv)")) @db.Decimal(10, 2)
+  subtotal       Decimal?   @default(0) @db.Decimal(10, 2)
   notes          String?
   created_at     DateTime?  @default(now()) @db.Timestamp(6)
   exchanges      exchanges? @relation(fields: [exchange_id], references: [id], onDelete: Cascade)
@@ -157,7 +158,7 @@ model exchanges {
   phone                String?          @db.VarChar(20)
   total_value_offered  Decimal?         @default(0) @db.Decimal(10, 2)
   total_value_received Decimal?         @default(0) @db.Decimal(10, 2)
-  balance              Decimal?         @default(dbgenerated("(total_value_received - total_value_offered)")) @db.Decimal(10, 2)
+  balance              Decimal?         @default(0) @db.Decimal(10, 2)
   payment_status       String?          @default("pending") @db.VarChar(20)
   exchange_status      String?          @default("pending") @db.VarChar(20)
   notes                String?
@@ -174,9 +175,9 @@ model inventory_lots {
   delivery_note_item_id Int?
   batch_number          String?              @db.VarChar(100)
   quantity              Int
-  available_quantity    Int
-  unit_cost_pph         Decimal              @db.Decimal(10, 2)
-  expiration_date       DateTime             @db.Date
+  available_quantity    Int                  @default(0)
+  unit_cost_pph         Decimal              @default(0.0) @db.Decimal(10,2)
+  expiration_date       DateTime             @default(now())
   zone                  String?              @db.VarChar(50)
   shelf_location        String?              @db.VarChar(100)
   status                String?              @default("active") @db.VarChar(20)
@@ -249,46 +250,48 @@ model product_interactions {
   recommendations                String?
   source                         String?   @db.VarChar(100)
   created_at                     DateTime? @default(now()) @db.Timestamp(6)
-  products_product_interactions_interacting_product_idToproducts products? @relation("product_interactions_interacting_product_idToproducts", fields: [interacting_product_id], references: [id], onDelete: Cascade)
-  products_product_interactions_product_idToproducts             products? @relation("product_interactions_product_idToproducts", fields: [product_id], references: [id], onDelete: Cascade)
+  products_interacting           products? @relation("interacting", fields: [interacting_product_id], references: [id], onDelete: Cascade)
+  products_main                  products? @relation("main", fields: [product_id], references: [id], onDelete: Cascade)
 
   @@unique([product_id, interacting_product_id, interaction_type])
 }
 
 model products {
-  id                                                                         Int      @id(map: "PK_0806c755e0aca124e67c0cf6d7d") @default(autoincrement())
-  name                                                                       String   @db.VarChar(100)
-  description                                                                String?
-  pricePPV                                                                   Decimal  @db.Decimal(10, 2)
-  stock                                                                      Int
-  category                                                                   String   @db.VarChar(50)
-  sku                                                                        String?  @db.VarChar(50)
-  expirationDate                                                             DateTime? @db.Date
-  createdAt                                                                  DateTime @default(now()) @db.Timestamp(6)
-  updatedAt                                                                  DateTime @default(now()) @db.Timestamp(6)
-  pricePPH                                                                   Decimal  @db.Decimal(10, 2)
-  imageUrl                                                                   String?
-  category_id                                                                Int?
-  dosageForm                                                                 String?  @db.VarChar(50)
-  barcode                                                                    String?  @db.VarChar(100)
-  zone                                                                       String?  @db.VarChar(50)
-  active                                                                     Boolean  @default(true)
-  laboratory                                                                 String?  @db.VarChar(100)
-  prescription                                                               Boolean  @default(false)
-  posologyadult                                                              String?
-  posologychild                                                              String?
-  contraindications                                                          String?
-  monograph                                                                  String?
-  alerts                                                                     alerts[]
-  delivery_note_items                                                        delivery_note_items[]
-  exchange_items                                                             exchange_items[]
-  inventory_lots                                                             inventory_lots[]
-  product_interactions_product_interactions_interacting_product_idToproducts product_interactions[] @relation("product_interactions_interacting_product_idToproducts")
-  product_interactions_product_interactions_product_idToproducts             product_interactions[] @relation("product_interactions_product_idToproducts")
-  categories                                                                 categories? @relation(fields: [category_id], references: [id])
-  refund_items                                                               refund_items[]
-  sale_items                                                                 sale_items[]
-  stock_movements                                                            stock_movements[]
+  id                   Int      @id(map: "PK_0806c755e0aca124e67c0cf6d7d") @default(autoincrement())
+  name                 String   @db.VarChar(100)
+  description          String?
+  pricePPV             Decimal  @db.Decimal(10, 2)
+  stock                Int
+  category             String?  @db.VarChar(50)
+  sku                  String?  @db.VarChar(50)
+  expirationDate       DateTime? @db.Date
+  createdAt            DateTime @default(now()) @db.Timestamp(6)
+  updatedAt            DateTime @default(now()) @db.Timestamp(6)
+  pricePPH             Decimal  @db.Decimal(10, 2)
+  imageUrl             String?
+  category_id          Int?
+  dosageForm           String?  @db.VarChar(50)
+  barcode              String?  @db.VarChar(100)
+  zone                 String?  @db.VarChar(50)
+  active               Boolean  @default(true)
+  laboratory           String?  @db.VarChar(100)
+  prescription         Boolean  @default(false)
+  posologyadult        String?
+  posologychild        String?
+  contraindications    String?
+  monograph            String?
+  alerts               alerts[]
+  delivery_note_items  delivery_note_items[]
+  exchange_items       exchange_items[]
+  inventory_lots       inventory_lots[]
+  interactions_as_main product_interactions[] @relation("main")
+  interactions_as_int  product_interactions[] @relation("interacting")
+  categories           categories? @relation(fields: [category_id], references: [id])
+  refund_items         refund_items[]
+  sale_items           sale_items[]
+  stock_movements      stock_movements[]
+  // ✅ RELACIÓN CON ai_generated_messages
+  ai_generated_messages ai_generated_messages[]
 }
 
 model refund_items {
@@ -362,10 +365,10 @@ model sale_items {
   unit_price_pph      Decimal        @db.Decimal(10, 2)
   discount_amount     Decimal?       @default(0) @db.Decimal(10, 2)
   discount_percentage Decimal?       @db.Decimal(5, 2)
-  subtotal            Decimal?       @default(dbgenerated("((quantity)::numeric * unit_price_ppv)")) @db.Decimal(10, 2)
-  total               Decimal?       @default(dbgenerated("(((quantity)::numeric * unit_price_ppv) - discount_amount)")) @db.Decimal(10, 2)
-  margin              Decimal?       @default(dbgenerated("((unit_price_ppv - unit_price_pph) * (quantity)::numeric)")) @db.Decimal(10, 2)
-  margin_percentage   Decimal?       @default(dbgenerated("\nCASE\n    WHEN (unit_price_ppv > (0)::numeric) THEN (((unit_price_ppv - unit_price_pph) / unit_price_ppv) * (100)::numeric)\n    ELSE (0)::numeric\nEND")) @db.Decimal(5, 2)
+  subtotal            Decimal?       @default(0) @db.Decimal(10, 2)
+  total               Decimal?       @default(0) @db.Decimal(10, 2)
+  margin              Decimal?       @default(0) @db.Decimal(10, 2)
+  margin_percentage   Decimal?       @default(0) @db.Decimal(5, 2)
   lot_id              Int?
   expiration_date     DateTime?      @db.Date
   notes               String?
@@ -442,21 +445,21 @@ model stock_movements {
 }
 
 model suppliers {
-  id           String   @id @default(cuid())
-  company_name String   @db.VarChar(255)
-  email        String?  @db.VarChar(255)
-  website      String?  @db.VarChar(255)
-  fax          String?  @db.VarChar(50)
-  payment_terms String? @db.VarChar(100)
-  tax_id       String?  @db.VarChar(50)
-  balance      Float    @default(0)
-  is_active    Boolean  @default(true)
-  notes        String?
-  created_at   DateTime @default(now())
-  updated_at   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  company_name  String   @db.VarChar(255)
+  email         String?  @db.VarChar(255)
+  website       String?  @db.VarChar(255)
+  fax           String?  @db.VarChar(50)
+  payment_terms String?  @db.VarChar(100)
+  tax_id        String?  @db.VarChar(50)
+  balance       Float    @default(0)
+  is_active     Boolean  @default(true)
+  notes         String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
 
-  phones      supplier_phones[]
-  addresses   supplier_addresses[]
+  phones         supplier_phones[]
+  addresses      supplier_addresses[]
   delivery_notes delivery_notes[]
 }
 
@@ -492,17 +495,6 @@ model supplier_addresses {
   @@index([supplier_id])
 }
 
-model typeorm_metadata {
-  type     String  @db.VarChar
-  database String? @db.VarChar
-  schema   String? @db.VarChar
-  table    String? @db.VarChar
-  name     String? @db.VarChar
-  value    String?
-
-  @@ignore
-}
-
 model user_roles {
   user_id                             Int
   role_id                             Int
@@ -536,4 +528,28 @@ model users {
   stock_movements                          stock_movements[]
   user_roles_user_roles_assigned_byTousers user_roles[]      @relation("user_roles_assigned_byTousers")
   user_roles_user_roles_user_idTousers     user_roles[]      @relation("user_roles_user_idTousers")
+  // ✅ RELACIÓN CON ai_generated_messages
+  ai_generated_messages ai_generated_messages[]
+}
+
+// ========== MODELOS TYPEORM EXISTENTES EN BD ==========
+
+model ai_generated_messages {
+  id          Int       @id @default(autoincrement())
+  tone        String    @db.VarChar
+  message     String    @db.Text
+  product_id  Int?
+  points_cost Int?
+  usage_count Int?
+  like_count  Int?
+  created_by  Int?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+
+  // Relaciones
+  product products? @relation(fields: [product_id], references: [id])
+  user    users?    @relation(fields: [created_by], references: [id])
+
+  @@index([product_id])
+  @@index([created_by])
+  @@map("ai_generated_messages")
 }
