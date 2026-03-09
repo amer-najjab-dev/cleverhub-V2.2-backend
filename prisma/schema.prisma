@@ -434,6 +434,7 @@ model user_roles {
 model users {
   id                                       Int               @id @default(autoincrement())
   email                                    String            @unique @db.VarChar(255)
+  password                                 String?            @db.VarChar(255) 
   full_name                                String?           @db.VarChar(255)
   google_id                                String?           @unique @db.VarChar(255)
   picture_url                              String?
@@ -459,4 +460,12 @@ model price_history {
   date       DateTime @default(now()) @db.Timestamp(6)
   priceppv   Decimal  @db.Decimal(10, 2)
   pricepph   Decimal  @db.Decimal(10, 2)
+}
+
+model session {
+  sid    String   @id @db.VarChar
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
 }

@@ -38,7 +38,7 @@ const regionMiddleware = (req: express.Request, res: express.Response, next: exp
 // ==========================================
 app.use(cors({
   origin: isProd 
-    ? true // En producción Railway, permite el origen que haga la petición
+    ? 'https://cleverhub-v2-frontend.vercel.app' // Tu URL de Vercel (sin la subruta /login)
     : 'http://localhost:5173', 
   credentials: true,
 }));
