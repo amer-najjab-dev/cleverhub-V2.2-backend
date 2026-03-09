@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { prisma } from './lib/prisma';
 import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
@@ -7,66 +8,92 @@ import { Pool } from 'pg';
 import { AppDataSource } from './data-source';
 import routes from './routes';
 
+// ==========================================
+// 1. VALIDACIÓN Y DIAGNÓSTICO DE ENTORNO
+// ==========================================
+const PORT = process.env.PORT || 3000;
+const isProd = process.env.NODE_ENV === 'production';
+
+console.log("--- DIAGNÓSTICO DE INICIO ---");
+if (!process.env.DATABASE_URL) {
+  console.error("❌ ERROR CRÍTICO: DATABASE_URL no está llegando al proceso.");
+  // No salimos aquí para permitir que TypeORM intente su propia conexión y ver el log
+} else {
+  console.log("🔗 DATABASE_URL detectada en el entorno.");
+  // Log de seguridad para verificar el host en Railway sin mostrar password
+  const dbHost = process.env.DATABASE_URL.split('@')[1] || "Host desconocido";
+  console.log(`📡 Host de DB destino: ${dbHost}`);
+}
+
 const app = express();
 
-// 1. AJUSTE DE PUERTO PARA RAILWAY
-const PORT = process.env.PORT || 3000;
-
-// Middleware de región simplificado (temporal)
+// Middleware de región
 const regionMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   (req as any).region = req.headers['x-region'] || 'MA';
   next();
 };
 
-// 2. CONFIGURACIÓN DE CORS (Ajustado para producción)
+// ==========================================
+// 2. CONFIGURACIÓN DE CORS
+// ==========================================
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? true // Permite el origen que haga la petición en producción (o pon tu URL de Railway aquí)
+  origin: isProd 
+    ? true // En producción Railway, permite el origen que haga la petición
     : 'http://localhost:5173', 
   credentials: true,
 }));
 
 app.use(express.json());
 
-// 3. POOL DE POSTGRESQL (Usando la URL de Railway si existe)
+// ==========================================
+// 3. CONEXIÓN POOL (SESIONES)
+// ==========================================
+// Forzamos el uso de DATABASE_URL para el pool de sesiones
 const pgPool = new Pool({
-  connectionString: process.env.DATABASE_URL, // Prioridad a la URL de Railway
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  connectionString: process.env.DATABASE_URL,
+  ssl: isProd ? { rejectUnauthorized: false } : false
 });
 
-// Configuración de sesiones
+pgPool.on('error', (err) => {
+  console.error('❌ Error inesperado en el Pool de PostgreSQL:', err.message);
+});
+
 app.use(
   session({
     store: new (pgSession(session))({
       pool: pgPool,
       tableName: 'session',
-      createTableIfMissing: true, // Cambiado a true por si la tabla no existe en la nueva DB
+      createTableIfMissing: true,
     }),
-    secret: process.env.SESSION_SECRET || 'cleverhub_super_secret_key',
+    secret: process.env.SESSION_SECRET || 'cleverhub_super_secret_key_123',
     resave: false,
     saveUninitialized: false,
-    proxy: process.env.NODE_ENV === 'production', // Necesario para Railway (detrás de proxy)
+    proxy: isProd,
     cookie: {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProd,
       maxAge: 1000 * 60 * 60 * 8, // 8 horas
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' para CORS cross-domain en prod
+      sameSite: isProd ? 'none' : 'lax',
     },
   })
 );
 
 app.use(regionMiddleware);
 
-// ========== RUTAS ==========
+// ==========================================
+// 4. RUTAS
+// ==========================================
 app.use('/api', routes);
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString(), env: process.env.NODE_ENV });
+  res.json({ 
+    status: 'OK', 
+    db_connected: !!process.env.DATABASE_URL,
+    env: process.env.NODE_ENV 
+  });
 });
 
-app.get('/ping', (req, res) => {
-  res.send('pong');
-});
+app.get('/ping', (req, res) => res.send('pong'));
 
 app.get('/', (req, res) => {
   res.json({ 
@@ -76,26 +103,27 @@ app.get('/', (req, res) => {
   });
 });
 
-// Manejo de errores 404
 app.use((req, res) => {
-  res.status(404).json({ 
-    error: 'Ruta no encontrada',
-    path: req.url 
-  });
+  res.status(404).json({ error: 'Ruta no encontrada', path: req.url });
 });
 
-// 4. INICIALIZACIÓN Y ARRANQUE (Ajustado para 0.0.0.0)
+// ==========================================
+// 5. ARRANQUE DEL SERVIDOR
+// ==========================================
+console.log("⏳ Inicializando AppDataSource (TypeORM)...");
+
 AppDataSource.initialize()
   .then(() => {
     console.log('✅ PostgreSQL conectado a través de TypeORM');
     
-    // IMPORTANTE: Escuchar en 0.0.0.0 para que Railway pueda exponer el servicio
     app.listen(Number(PORT), '0.0.0.0', () => {
-      console.log(`🚀 Cleverhub Backend running on port ${PORT}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🚀 Cleverhub Backend corriendo en puerto: ${PORT}`);
+      console.log(`🌍 Modo: ${process.env.NODE_ENV || 'development'}`);
     });
   })
   .catch((error) => {
-    console.error('❌ Error conectando a la base de datos:', error);
+    console.error('❌ Error fatal en la inicialización de TypeORM:');
+    console.error(error.message);
+    // En Railway, si fallamos aquí, el log nos dirá exactamente por qué (ej. ECONNREFUSED)
     process.exit(1);
   });

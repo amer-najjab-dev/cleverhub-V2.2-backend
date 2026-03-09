@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const clientIntelligence_controller_1 = require("../../controllers/ai/clientIntelligence.controller");
+const auth_1 = require("../../middleware/auth");
+const router = (0, express_1.Router)();
+router.use(auth_1.requireAuth);
+router.get('/intelligence', clientIntelligence_controller_1.clientIntelligenceController.getClientIntelligence.bind(clientIntelligence_controller_1.clientIntelligenceController));
+router.get('/risk-scores', clientIntelligence_controller_1.clientIntelligenceController.getAllRiskScores.bind(clientIntelligence_controller_1.clientIntelligenceController));
+router.get('/risk-scores/:clientId', clientIntelligence_controller_1.clientIntelligenceController.getClientRiskScore.bind(clientIntelligence_controller_1.clientIntelligenceController));
+router.get('/segments', clientIntelligence_controller_1.clientIntelligenceController.getClientSegments.bind(clientIntelligence_controller_1.clientIntelligenceController));
+router.get('/behavior/:clientId', clientIntelligence_controller_1.clientIntelligenceController.getClientPurchaseBehavior.bind(clientIntelligence_controller_1.clientIntelligenceController));
+exports.default = router;

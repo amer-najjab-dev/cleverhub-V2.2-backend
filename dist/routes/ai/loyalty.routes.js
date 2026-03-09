@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const loyalty_controller_1 = require("../../controllers/ai/loyalty.controller");
+const auth_1 = require("../../middleware/auth");
+const router = (0, express_1.Router)();
+router.use(auth_1.requireAuth);
+router.get('/summary', loyalty_controller_1.loyaltyController.getLoyaltySummary.bind(loyalty_controller_1.loyaltyController));
+router.get('/points/circulation', loyalty_controller_1.loyaltyController.getPointsInCirculation.bind(loyalty_controller_1.loyaltyController));
+router.get('/points/client/:clientId', loyalty_controller_1.loyaltyController.getClientLoyalty.bind(loyalty_controller_1.loyaltyController));
+router.get('/chronic-patients', loyalty_controller_1.loyaltyController.getChronicPatients.bind(loyalty_controller_1.loyaltyController));
+router.get('/dormant-clients', loyalty_controller_1.loyaltyController.getDormantClients.bind(loyalty_controller_1.loyaltyController));
+router.get('/tiers', loyalty_controller_1.loyaltyController.getTierAnalysis.bind(loyalty_controller_1.loyaltyController));
+router.get('/categories/:tier', loyalty_controller_1.loyaltyController.getFavoriteCategoriesByTier.bind(loyalty_controller_1.loyaltyController));
+exports.default = router;
