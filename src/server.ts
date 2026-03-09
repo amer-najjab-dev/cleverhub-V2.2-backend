@@ -7,30 +7,31 @@ import { Pool } from 'pg';
 import { AppDataSource } from './data-source';
 import routes from './routes';
 
+const app = express();
+
+// 1. AJUSTE DE PUERTO PARA RAILWAY
+const PORT = process.env.PORT || 3000;
+
 // Middleware de región simplificado (temporal)
 const regionMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   (req as any).region = req.headers['x-region'] || 'MA';
   next();
 };
 
-const app = express();
-const PORT = process.env.PORT || 5001;
-
-// Configuración de CORS
+// 2. CONFIGURACIÓN DE CORS (Ajustado para producción)
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: process.env.NODE_ENV === 'production' 
+    ? true // Permite el origen que haga la petición en producción (o pon tu URL de Railway aquí)
+    : 'http://localhost:5173', 
   credentials: true,
 }));
 
 app.use(express.json());
 
-// Pool de PostgreSQL para sesiones
+// 3. POOL DE POSTGRESQL (Usando la URL de Railway si existe)
 const pgPool = new Pool({
-  user: process.env.DB_USER || 'admin',
-  password: process.env.DB_PASSWORD || 'admin',
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'cleverhub_db',
+  connectionString: process.env.DATABASE_URL, // Prioridad a la URL de Railway
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
 // Configuración de sesiones
@@ -39,130 +40,62 @@ app.use(
     store: new (pgSession(session))({
       pool: pgPool,
       tableName: 'session',
-      createTableIfMissing: false,
+      createTableIfMissing: true, // Cambiado a true por si la tabla no existe en la nueva DB
     }),
-    secret: process.env.SESSION_SECRET || 'cleverhub_super_secret_key_change_this',
+    secret: process.env.SESSION_SECRET || 'cleverhub_super_secret_key',
     resave: false,
     saveUninitialized: false,
+    proxy: process.env.NODE_ENV === 'production', // Necesario para Railway (detrás de proxy)
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       maxAge: 1000 * 60 * 60 * 8, // 8 horas
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax', // 'none' para CORS cross-domain en prod
     },
   })
 );
 
-// Middleware de región
 app.use(regionMiddleware);
 
-// ========== LOGS DE DEPURACIÓN PARA RUTAS ==========
-console.log('🔍 ===== INICIO DE DEPURACIÓN DE RUTAS =====');
-console.log('📦 Importando rutas desde ./routes');
-
-// Mostrar información de routes sin usar condición problemática
-console.log('📦 routes importado: ✅ Sí');
-console.log('📦 routes es de tipo:', typeof routes);
-console.log('📦 routes.stack:', routes?.stack ? routes.stack.length : 'No tiene stack');
-
-// Montar rutas en /api
-console.log('🔄 Montando rutas en /api');
+// ========== RUTAS ==========
 app.use('/api', routes);
-console.log('✅ Rutas montadas en /api');
 
-// Ruta de prueba directa (sin pasar por el router)
 app.get('/health', (req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({ status: 'OK', timestamp: new Date().toISOString(), env: process.env.NODE_ENV });
 });
 
-// Ruta de prueba para verificar que el servidor responde
 app.get('/ping', (req, res) => {
   res.send('pong');
 });
 
-// ========== LISTAR TODAS LAS RUTAS REGISTRADAS ==========
-console.log('📋 Rutas registradas en el servidor:');
-
-// Función para listar rutas recursivamente
-const listRoutes = (stack: any, basePath = '') => {
-  if (!stack) return;
-  
-  stack.forEach((layer: any) => {
-    if (layer.route) {
-      // Ruta directa
-      const methods = Object.keys(layer.route.methods).join(', ').toUpperCase();
-      console.log(`   ${methods} ${basePath}${layer.route.path}`);
-    } else if (layer.name === 'router' && layer.handle.stack) {
-      // Router montado
-      const routerPath = layer.regexp.source
-        .replace('\\/?(?=\\/|$)', '')
-        .replace(/\\\//g, '/')
-        .replace(/\^/g, '')
-        .replace(/\?/g, '')
-        .replace(/\(\?:\(\[\^\\\/\]\+\?\)\)/g, ':param');
-      
-      console.log(`\n   📌 Router montado en: ${routerPath || '/'}`);
-      listRoutes(layer.handle.stack, `${basePath}${routerPath}`);
-    }
-  });
-};
-
-if (app._router && app._router.stack) {
-  listRoutes(app._router.stack);
-} else {
-  console.log('   No se pudo acceder al stack de rutas');
-}
-
-console.log('🔍 ===== FIN DE DEPURACIÓN DE RUTAS =====\n');
-
-// Ruta raíz
 app.get('/', (req, res) => {
   res.json({ 
     message: 'CleverHub V2 Backend 🚀',
-    version: '2.0.0',
-    endpoints: [
-      '/api/products',
-      '/api/products/search?q=query',
-      '/api/clients',
-      '/api/sales',
-      '/api/auth/login',
-      '/api/auth/register',
-      '/api/auth/me',
-      '/api/ai/products/test',
-      '/api/ai/products/predictions',
-      '/api/ai/products/trends',
-      '/api/ai/products/market-intelligence',
-      '/health',
-      '/ping'
-    ]
+    status: 'Online',
+    version: '2.0.0'
   });
 });
 
-// Manejo de errores 404 - AHORA DEVUELVE JSON
+// Manejo de errores 404
 app.use((req, res) => {
-  console.log(`❌ Ruta no encontrada: ${req.method} ${req.url}`);
   res.status(404).json({ 
     error: 'Ruta no encontrada',
-    method: req.method,
-    path: req.url,
-    message: `No se encontró la ruta ${req.method} ${req.url}`
+    path: req.url 
   });
 });
 
-// Inicializar base de datos y arrancar servidor
+// 4. INICIALIZACIÓN Y ARRANQUE (Ajustado para 0.0.0.0)
 AppDataSource.initialize()
   .then(() => {
-    console.log('✅ PostgreSQL conectado');
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor en http://localhost:${PORT}`);
-      console.log(`📊 Endpoints disponibles:`);
-      console.log(`   - GET  /health`);
-      console.log(`   - GET  /ping`);
-      console.log(`   - GET  /api/ai/products/test`);
-      console.log(`   - POST /api/auth/login`);
+    console.log('✅ PostgreSQL conectado a través de TypeORM');
+    
+    // IMPORTANTE: Escuchar en 0.0.0.0 para que Railway pueda exponer el servicio
+    app.listen(Number(PORT), '0.0.0.0', () => {
+      console.log(`🚀 Cleverhub Backend running on port ${PORT}`);
+      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
   })
   .catch((error) => {
-    console.error('❌ Error conectando a PostgreSQL:', error);
+    console.error('❌ Error conectando a la base de datos:', error);
     process.exit(1);
   });

@@ -4,8 +4,11 @@
   "version": "1.0.0",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts"
-  },
+   "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "postinstall": "prisma generate"
+    },
   "dependencies": {
     "@nestjs/common": "^11.1.12",
     "@nestjs/core": "^11.1.12",
