@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 
-// Solo para depuración: Ver qué está leyendo el proceso antes de instanciar
-console.log("🔍 DATABASE_URL actual en el proceso:", process.env.DATABASE_URL ? "Configurada (OK)" : "VACÍA (ERROR)");
+// Log para saber qué está viendo el proceso de Node ANTES de que Prisma actúe
+console.log("🔍 [DIAGNÓSTICO PRISMA] DATABASE_URL en process.env:", process.env.DATABASE_URL ? "DETECTADA" : "NO DETECTADA");
 
+// Dejamos que Prisma busque DATABASE_URL por su cuenta en el entorno
 export const prisma = new PrismaClient();
