@@ -8,23 +8,21 @@ import { StockMovement } from './entities/StockMovement';
 
 dotenv.config();
 
+const isProd = process.env.NODE_ENV === 'production';
+
 export const AppDataSource = new DataSource({
   type: "postgres",
-  host: process.env.DB_HOST || "localhost",
-  port: parseInt(process.env.DB_PORT || "5432"),
-  username: process.env.DB_USERNAME || "admin",
-  password: process.env.DB_PASSWORD || "",
-  database: process.env.DB_NAME || "cleverhub_db",
+  // Usamos la URL completa que detectamos en los logs para evitar fallos de host/puerto
+  url: process.env.DATABASE_URL,
   
-  // IMPORTANTE: Desactivar synchronize si ya tienes las tablas
-  synchronize: false,  // Cambiar a false ya que las tablas ya existen
+  // Sincronización desactivada en producción para proteger los datos de Cleverhub
+  synchronize: false, 
   
-  // O si quieres que TypeORM cree typeorm_metadata automáticamente:
-  // synchronize: true,
+  logging: isProd ? ['error'] : ['query', 'error'],
   
-  logging: ['query', 'error'],
-  
-  // Cargar todas las entidades
+  // Configuración de SSL necesaria para conexiones externas/internas en la nube
+  ssl: isProd ? { rejectUnauthorized: false } : false,
+
   entities: [
     __dirname + "/entities/*.ts",
     __dirname + "/entities/*.js"
@@ -36,7 +34,4 @@ export const AppDataSource = new DataSource({
   ],
   
   subscribers: [],
-  
-  // Opcional: Desactivar metadatos de columnas generadas
-  // metadataTableName: false,
 });
