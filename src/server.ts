@@ -1,61 +1,75 @@
 import 'dotenv/config';
-import { prisma } from './lib/prisma';
 import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
 import pgSession from 'connect-pg-simple';
 import { Pool } from 'pg';
-import { AppDataSource } from './data-source';
-import routes from './routes';
+import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 
-const app = express();
-
-// ==========================================
-// 1. CONFIGURACIÓN DE RED Y PROXY (RAILWAY)
-// ==========================================
-const PORT = process.env.PORT || 3000;
-const isProd = process.env.NODE_ENV === 'production';
-
-// IMPORTANTE: Permite que las cookies de sesión funcionen tras el proxy de Railway
-app.set('trust proxy', 1);
-
-console.log("--- DIAGNÓSTICO DE INICIO ---");
-if (!process.env.DATABASE_URL) {
-  console.error("❌ ERROR CRÍTICO: DATABASE_URL no detectada.");
-} else {
-  const dbHost = process.env.DATABASE_URL.split('@')[1] || "Host desconocido";
-  console.log(`📡 Host de DB destino: ${dbHost}`);
+// Extender tipos de sesión
+declare module 'express-session' {
+  interface SessionData {
+    userId: number;
+    userRole?: string;
+    userEmail?: string;
+  }
 }
 
-// ==========================================
-// 2. CONFIGURACIÓN DE CORS
-// ==========================================
-app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'https://cleverhub-v2-frontend.vercel.app'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-region']
-}));
+// Configuración según entorno
+const isProd = process.env.NODE_ENV === 'production';
 
-app.use(express.json());
-
-// Middleware de región
-const regionMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  (req as any).region = req.headers['x-region'] || 'MA';
-  next();
-};
-
-// ==========================================
-// 3. CONEXIÓN POOL Y SESIONES
-// ==========================================
+// Pool para sesiones (usa DATABASE_URL directamente)
 const pgPool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: isProd ? { rejectUnauthorized: false } : false
 });
 
+// Adapter para Prisma
+const adapter = new PrismaPg(pgPool);
+
+export const prisma = new PrismaClient({
+  log: isProd ? ['error'] : ['query', 'info', 'warn', 'error'],
+  adapter,
+});
+
+const app = express();
+const PORT = process.env.PORT || 5001;
+
+// ==========================================
+// 1. CONFIGURACIÓN DE RED Y PROXY (RENDER)
+// ==========================================
+app.set('trust proxy', 1); // Render usa proxies
+
+// ==========================================
+// 2. CONFIGURACIÓN DE CORS (VERCEL)
+// ==========================================
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.FRONTEND_URL || 'https://cleverhub-v2-frontend.vercel.app'
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Permitir requests sin origin (como apps móviles o Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('No autorizado por CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-region', 'Cookie']
+}));
+
+app.use(express.json());
+
+// ==========================================
+// 3. CONFIGURACIÓN DE SESIONES (PRODUCCIÓN)
+// ==========================================
 app.use(
   session({
     store: new (pgSession(session))({
@@ -63,61 +77,97 @@ app.use(
       tableName: 'session',
       createTableIfMissing: true,
     }),
-    secret: process.env.SESSION_SECRET || 'cleverhub_super_secret_key_123',
+    secret: process.env.SESSION_SECRET || 'dev_secret_key',
     resave: false,
     saveUninitialized: false,
-    name: 'cleverhub.sid', // Nombre de la cookie personalizado
+    name: 'cleverhub.sid',
     cookie: {
       httpOnly: true,
-      secure: isProd, // True en producción (requiere HTTPS)
+      secure: isProd, // true en producción (HTTPS)
       maxAge: 1000 * 60 * 60 * 8, // 8 horas
-      sameSite: isProd ? 'none' : 'lax', // 'none' permite cross-site entre Vercel y Railway
+      sameSite: isProd ? 'none' : 'lax', // 'none' permite cross-site
+      domain: isProd ? '.render.com' : undefined,
+      path: '/'
     },
   })
 );
 
-app.use(regionMiddleware);
+// ==========================================
+// 4. MIDDLEWARE DE REGIÓN
+// ==========================================
+app.use((req, res, next) => {
+  (req as any).region = req.headers['x-region'] || 'MA';
+  next();
+});
 
 // ==========================================
-// 4. RUTAS
+// 5. RUTAS
 // ==========================================
+import routes from './routes';
 app.use('/api', routes);
 
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    db_connected: !!process.env.DATABASE_URL,
-    env: process.env.NODE_ENV 
-  });
+// ==========================================
+// 6. RUTAS DE SALUD
+// ==========================================
+app.get('/health', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ 
+      status: 'OK', 
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'ERROR', 
+      error: String(error)
+    });
+  }
 });
 
 app.get('/', (req, res) => {
   res.json({ 
     message: 'CleverHub V2 Backend 🚀',
     status: 'Online',
-    version: '2.0.0'
+    version: '2.0.0',
+    environment: process.env.NODE_ENV
   });
 });
 
-// Manejador de rutas no encontradas
+// ==========================================
+// 7. MANEJADOR DE ERRORES 404
+// ==========================================
 app.use((req, res) => {
-  res.status(404).json({ error: 'Ruta no encontrada', path: req.url });
+  res.status(404).json({ 
+    success: false,
+    error: 'Ruta no encontrada', 
+    path: req.url 
+  });
 });
 
 // ==========================================
-// 5. ARRANQUE DEL SERVIDOR
+// 8. ARRANQUE DEL SERVIDOR
 // ==========================================
-AppDataSource.initialize()
-  .then(() => {
-    console.log('✅ PostgreSQL conectado a través de TypeORM');
-    
+async function startServer() {
+  try {
+    await prisma.$connect();
+    console.log('✅ Prisma conectado a PostgreSQL');
+
+    const userCount = await prisma.users.count();
+    console.log(`📊 Usuarios en BD: ${userCount}`);
+
     app.listen(Number(PORT), '0.0.0.0', () => {
-      console.log(`🚀 Cleverhub Backend en puerto: ${PORT}`);
+      console.log(`🚀 Servidor en puerto: ${PORT}`);
+      console.log(`🌍 Entorno: ${process.env.NODE_ENV}`);
+      console.log(`🔗 Frontend permitido: ${allowedOrigins.join(', ')}`);
     });
-  })
-  .catch((error) => {
-    console.error('❌ Error fatal TypeORM:', error.message);
+
+  } catch (error) {
+    console.error('❌ Error fatal:', error);
     process.exit(1);
-  });
+  }
+}
+
+startServer();
 
 export default app;

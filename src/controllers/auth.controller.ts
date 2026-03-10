@@ -1,15 +1,13 @@
+// src/controllers/auth.controller.ts
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
-import { AppDataSource } from '../data-source';
-import { User } from '../entities/User';
+import { prisma } from '../server';
 
 export class AuthController {
-  // Registro de usuario
   async register(req: Request, res: Response) {
     try {
       const { email, password, fullName, role = 'employee' } = req.body;
 
-      // Validaciones básicas
       if (!email || !password || !fullName) {
         return res.status(400).json({
           success: false,
@@ -17,10 +15,11 @@ export class AuthController {
         });
       }
 
-      const userRepo = AppDataSource.getRepository(User);
-
       // Verificar si el usuario ya existe
-      const existingUser = await userRepo.findOne({ where: { email } });
+      const existingUser = await prisma.users.findUnique({
+        where: { email }
+      });
+
       if (existingUser) {
         return res.status(400).json({
           success: false,
@@ -31,15 +30,22 @@ export class AuthController {
       // Hashear contraseña
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Crear usuario
-      const user = userRepo.create({
-        email,
-        password: hashedPassword,
-        fullName,
-        role
+      // Crear usuario - USANDO LOS NOMBRES DE COLUMNA DEL SCHEMA (snake_case)
+      const user = await prisma.users.create({
+        data: {
+          email,
+          password: hashedPassword,
+          full_name: fullName,  // ¡CORREGIDO! full_name en lugar de fullName
+          role,
+          is_active: true        // ¡CORREGIDO! is_active en lugar de isActive
+        },
+        select: {
+          id: true,
+          email: true,
+          full_name: true,      // ¡CORREGIDO!
+          role: true
+        }
       });
-
-      await userRepo.save(user);
 
       res.status(201).json({
         success: true,
@@ -47,7 +53,7 @@ export class AuthController {
         data: {
           id: user.id,
           email: user.email,
-          fullName: user.fullName,
+          fullName: user.full_name,  // Mapear a camelCase para la respuesta
           role: user.role
         }
       });
@@ -61,7 +67,6 @@ export class AuthController {
     }
   }
 
-  // Login
   async login(req: Request, res: Response) {
     try {
       const { email, password } = req.body;
@@ -73,20 +78,17 @@ export class AuthController {
         });
       }
 
-      const userRepo = AppDataSource.getRepository(User);
+      const user = await prisma.users.findUnique({
+        where: { email }
+      });
       
-      // Buscar usuario por email
-      const user = await userRepo.findOne({ where: { email } });
-      
-      // Verificar si el usuario existe
-      if (!user) {
+      if (!user || !user.password) {
         return res.status(401).json({
           success: false,
           message: 'Credenciales inválidas'
         });
       }
 
-      // Verificar contraseña
       const passwordValid = await bcrypt.compare(password, user.password);
       if (!passwordValid) {
         return res.status(401).json({
@@ -95,10 +97,18 @@ export class AuthController {
         });
       }
 
-      // Guardar datos en la sesión
+      // Guardar en sesión
       req.session.userId = user.id;
-      req.session.userRole = user.role;
+      req.session.userRole = user.role || undefined;
       req.session.userEmail = user.email;
+
+      // Guardar sesión explícitamente
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) reject(err);
+          else resolve(true);
+        });
+      });
 
       res.json({
         success: true,
@@ -106,7 +116,7 @@ export class AuthController {
         data: {
           id: user.id,
           email: user.email,
-          fullName: user.fullName,
+          fullName: user.full_name,  // Mapear a camelCase
           role: user.role
         }
       });
@@ -120,7 +130,6 @@ export class AuthController {
     }
   }
 
-  // Logout
   async logout(req: Request, res: Response) {
     req.session.destroy((err) => {
       if (err) {
@@ -130,7 +139,7 @@ export class AuthController {
         });
       }
       
-      res.clearCookie('connect.sid');
+      res.clearCookie('cleverhub.sid');
       res.json({
         success: true,
         message: 'Sesión cerrada exitosamente'
@@ -138,7 +147,6 @@ export class AuthController {
     });
   }
 
-  // Obtener usuario actual
   async me(req: Request, res: Response) {
     try {
       if (!req.session.userId) {
@@ -148,9 +156,14 @@ export class AuthController {
         });
       }
 
-      const userRepo = AppDataSource.getRepository(User);
-      const user = await userRepo.findOne({ 
-        where: { id: req.session.userId }
+      const user = await prisma.users.findUnique({
+        where: { id: req.session.userId },
+        select: {
+          id: true,
+          email: true,
+          full_name: true,  // ¡CORREGIDO!
+          role: true
+        }
       });
 
       if (!user) {
@@ -165,7 +178,7 @@ export class AuthController {
         data: {
           id: user.id,
           email: user.email,
-          fullName: user.fullName,
+          fullName: user.full_name,  // Mapear a camelCase
           role: user.role
         }
       });

@@ -1,117 +1,120 @@
+// src/controllers/supplier.controller.ts
 import { Request, Response } from 'express';
-import { supplierService } from '../services/supplier/supplier.service';
+import { prisma } from '../server';
+import { Prisma } from '@prisma/client';
 
 export class SupplierController {
   
   async getAll(req: Request, res: Response) {
     try {
-      const { search } = req.query;
-      
-      const filters: any = {};
-      if (search) filters.search = search;
-      
-      const suppliers = await supplierService.getAll(filters);
-      
-      res.json({
-        success: true,
-        data: suppliers
+      const suppliers = await prisma.suppliers.findMany({
+        orderBy: { company_name: 'asc' }
       });
+      res.json({ success: true, data: suppliers });
     } catch (error: any) {
-      res.status(500).json({ 
-        success: false, 
-        message: error.message 
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
-  
+
   async getById(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const supplier = await supplierService.getById(id);
-      
+      const supplier = await prisma.suppliers.findUnique({
+        where: { id: id }
+      });
       if (!supplier) {
-        return res.status(404).json({ 
-          success: false, 
-          message: 'Fournisseur non trouvé' 
-        });
+        return res.status(404).json({ success: false, message: 'Proveedor no encontrado' });
       }
-      
-      res.json({
-        success: true,
-        data: supplier
-      });
+      res.json({ success: true, data: supplier });
     } catch (error: any) {
-      res.status(500).json({ 
-        success: false, 
-        message: error.message 
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
-  
+
   async search(req: Request, res: Response) {
     try {
       const { q } = req.query;
-      const suppliers = await supplierService.search(q as string);
+      const where: Prisma.suppliersWhereInput = q ? { 
+        company_name: { contains: q as string, mode: Prisma.QueryMode.insensitive } 
+      } : {};
       
-      res.json({
-        success: true,
-        data: suppliers
+      const suppliers = await prisma.suppliers.findMany({
+        where,
+        take: 20,
+        orderBy: { company_name: 'asc' }
       });
+      res.json({ success: true, data: suppliers });
     } catch (error: any) {
-      res.status(500).json({ 
-        success: false, 
-        message: error.message 
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
-  
+
   async create(req: Request, res: Response) {
     try {
-      const supplier = await supplierService.create(req.body);
+      // CORREGIDO: Usando SOLO los campos que existen en el modelo
+      const data: any = {
+        company_name: req.body.name,
+      };
       
-      res.status(201).json({
-        success: true,
-        data: supplier
+      // Añadir campos opcionales solo si existen
+      if (req.body.email) data.email = req.body.email;
+      if (req.body.website) data.website = req.body.website;
+      if (req.body.fax) data.fax = req.body.fax;
+      if (req.body.payment_terms) data.payment_terms = req.body.paymentTerms;
+      if (req.body.tax_id) data.tax_id = req.body.taxId;
+      if (req.body.registration_number) data.registration_number = req.body.registrationNumber;
+      if (req.body.notes) data.notes = req.body.notes;
+      
+      // NOTA: El modelo NO tiene contact_person, phone, address
+      // Si necesitas estos campos, deberás agregarlos al modelo primero
+
+      const supplier = await prisma.suppliers.create({
+        data
       });
+      
+      res.status(201).json({ success: true, data: supplier });
     } catch (error: any) {
-      res.status(500).json({ 
-        success: false, 
-        message: error.message 
-      });
+      console.error('Error creating supplier:', error);
+      res.status(500).json({ success: false, message: error.message });
     }
   }
-  
+
   async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      const supplier = await supplierService.update(id, req.body);
       
-      res.json({
-        success: true,
-        data: supplier
+      // CORREGIDO: Usando SOLO los campos que existen en el modelo
+      const data: any = {};
+      
+      if (req.body.name) data.company_name = req.body.name;
+      if (req.body.email) data.email = req.body.email;
+      if (req.body.website) data.website = req.body.website;
+      if (req.body.fax) data.fax = req.body.fax;
+      if (req.body.payment_terms) data.payment_terms = req.body.paymentTerms;
+      if (req.body.tax_id) data.tax_id = req.body.taxId;
+      if (req.body.registration_number) data.registration_number = req.body.registrationNumber;
+      if (req.body.notes) data.notes = req.body.notes;
+
+      const supplier = await prisma.suppliers.update({
+        where: { id: id },
+        data
       });
+      
+      res.json({ success: true, data: supplier });
     } catch (error: any) {
-      res.status(500).json({ 
-        success: false, 
-        message: error.message 
-      });
+      console.error('Error updating supplier:', error);
+      res.status(500).json({ success: false, message: error.message });
     }
   }
-  
+
   async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
-      await supplierService.delete(id);
-      
-      res.json({
-        success: true,
-        message: 'Fournisseur supprimé avec succès'
-      });
+      await prisma.suppliers.delete({ where: { id: id } });
+      res.json({ success: true });
     } catch (error: any) {
-      res.status(500).json({ 
-        success: false, 
-        message: error.message 
-      });
+      console.error('Error deleting supplier:', error);
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 }

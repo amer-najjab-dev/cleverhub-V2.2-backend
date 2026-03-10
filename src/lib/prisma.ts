@@ -1,7 +1,12 @@
+// src/lib/prisma.ts
 import { PrismaClient } from '@prisma/client';
 
-// Log para saber qué está viendo el proceso de Node ANTES de que Prisma actúe
-console.log("🔍 [DIAGNÓSTICO PRISMA] DATABASE_URL en process.env:", process.env.DATABASE_URL ? "DETECTADA" : "NO DETECTADA");
+const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-// Dejamos que Prisma busque DATABASE_URL por su cuenta en el entorno
-export const prisma = new PrismaClient();
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;

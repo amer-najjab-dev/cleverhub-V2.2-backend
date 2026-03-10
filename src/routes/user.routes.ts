@@ -7,19 +7,14 @@ const router = Router();
 // Todas las rutas requieren autenticación
 router.use(requireAuth);
 
-// Rutas de administración (solo admin)
-router.get('/', requireRole(['admin']), 
-userController.getAll.bind(userController));
-router.get('/:id', requireRole(['admin']), 
-userController.getById.bind(userController));
-router.post('/', requireRole(['admin']), 
-userController.create.bind(userController));
-router.put('/:id', requireRole(['admin']), 
-userController.update.bind(userController));
-router.delete('/:id', requireRole(['admin']), 
-userController.delete.bind(userController));
+// Rutas de usuarios (solo admin)
+router.get('/', requireRole(['admin']), userController.getAll.bind(userController));
+router.get('/:id', requireRole(['admin']), userController.getById.bind(userController));
+router.post('/', requireRole(['admin']), userController.create.bind(userController));
+router.put('/:id', requireRole(['admin']), userController.update.bind(userController));
+router.delete('/:id', requireRole(['admin']), userController.delete.bind(userController));
 
-// Ruta de perfil propio (cualquier usuario autenticado)
+// Ruta para actualizar perfil propio (cualquier usuario autenticado)
 router.put('/profile/me', userController.updateProfile.bind(userController));
 
 export default router;

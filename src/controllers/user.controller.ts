@@ -1,83 +1,68 @@
+// src/controllers/user.controller.ts
 import { Request, Response } from 'express';
-import bcrypt from 'bcrypt';
-import { AppDataSource } from '../data-source';
-import { User } from '../entities/User';
+import * as bcrypt from 'bcrypt';
+import { prisma } from '../server';
 
 export class UserController {
-  // Obtener todos los usuarios (solo admin)
+  
   async getAll(req: Request, res: Response) {
     try {
-      const userRepo = AppDataSource.getRepository(User);
-      
-      const users = await userRepo.find({
-        select: ['id', 'email', 'fullName', 'role', 'isActive', 'createdAt'],
-        order: { createdAt: 'DESC' }
+      const users = await prisma.users.findMany({
+        select: {
+          id: true,
+          email: true,
+          full_name: true,
+          role: true,
+          is_active: true,
+          created_at: true
+          // last_login ELIMINADO - no existe en el modelo
+        },
+        orderBy: { created_at: 'desc' }
       });
 
-      res.json({
-        success: true,
-        data: users
-      });
-
+      res.json({ success: true, data: users });
     } catch (error: any) {
-      console.error('Error getting users:', error);
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
-  // Obtener un usuario por ID
   async getById(req: Request, res: Response) {
     try {
-      const id = parseInt(req.params.id);
-      const userRepo = AppDataSource.getRepository(User);
-      
-      const user = await userRepo.findOne({
-        where: { id },
-        select: ['id', 'email', 'fullName', 'role', 'isActive', 'createdAt']
+      const { id } = req.params;
+      const user = await prisma.users.findUnique({
+        where: { id: parseInt(id) },
+        select: {
+          id: true,
+          email: true,
+          full_name: true,
+          role: true,
+          is_active: true,
+          created_at: true,
+          updated_at: true
+        }
       });
 
       if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'Usuario no encontrado'
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Usuario no encontrado' 
         });
       }
 
-      res.json({
-        success: true,
-        data: user
-      });
-
+      res.json({ success: true, data: user });
     } catch (error: any) {
-      console.error('Error getting user:', error);
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
-  // Crear nuevo usuario (solo admin)
   async create(req: Request, res: Response) {
     try {
-      const { email, password, fullName, role = 'employee', isActive = true } = 
-req.body;
+      const { email, password, fullName, role = 'employee' } = req.body;
 
-      // Validaciones
-      if (!email || !password || !fullName) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email, contraseña y nombre son obligatorios'
-        });
-      }
+      const existingUser = await prisma.users.findUnique({
+        where: { email }
+      });
 
-      const userRepo = AppDataSource.getRepository(User);
-
-      // Verificar si el email ya existe
-      const existingUser = await userRepo.findOne({ where: { email } });
       if (existingUser) {
         return res.status(400).json({
           success: false,
@@ -85,218 +70,86 @@ req.body;
         });
       }
 
-      // Hashear contraseña
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Crear usuario
-      const user = userRepo.create({
-        email,
-        password: hashedPassword,
-        fullName,
-        role,
-        isActive
-      });
-
-      await userRepo.save(user);
-
-      res.status(201).json({
-        success: true,
-        message: 'Usuario creado exitosamente',
+      const user = await prisma.users.create({
         data: {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          role: user.role,
-          isActive: user.isActive
+          email,
+          password: hashedPassword,
+          full_name: fullName,
+          role,
+          is_active: true
+        },
+        select: {
+          id: true,
+          email: true,
+          full_name: true,
+          role: true
         }
       });
 
+      res.status(201).json({ success: true, data: user });
     } catch (error: any) {
-      console.error('Error creating user:', error);
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
-  // Actualizar usuario
   async update(req: Request, res: Response) {
     try {
-      const id = parseInt(req.params.id);
-      const { email, fullName, role, isActive, password } = req.body;
+      const { id } = req.params;
+      const { email, fullName, role, isActive } = req.body;
 
-      const userRepo = AppDataSource.getRepository(User);
-      
-      const user = await userRepo.findOne({ where: { id } });
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'Usuario no encontrado'
-        });
-      }
-
-      // Si se proporciona nuevo email, verificar que no exista
-      if (email && email !== user.email) {
-        const existingUser = await userRepo.findOne({ where: { email } });
-        if (existingUser) {
-          return res.status(400).json({
-            success: false,
-            message: 'El email ya está registrado por otro usuario'
-          });
-        }
-        user.email = email;
-      }
-
-      if (fullName) user.fullName = fullName;
-      if (role) user.role = role;
-      if (isActive !== undefined) user.isActive = isActive;
-
-      // Si se proporciona nueva contraseña, hashearla
-      if (password) {
-        user.password = await bcrypt.hash(password, 10);
-      }
-
-      await userRepo.save(user);
-
-      res.json({
-        success: true,
-        message: 'Usuario actualizado exitosamente',
+      const user = await prisma.users.update({
+        where: { id: parseInt(id) },
         data: {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          role: user.role,
-          isActive: user.isActive
+          email,
+          full_name: fullName,
+          role,
+          is_active: isActive
+        },
+        select: {
+          id: true,
+          email: true,
+          full_name: true,
+          role: true,
+          is_active: true
         }
       });
 
+      res.json({ success: true, data: user });
     } catch (error: any) {
-      console.error('Error updating user:', error);
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
-  // Eliminar usuario (solo admin)
   async delete(req: Request, res: Response) {
     try {
-      const id = parseInt(req.params.id);
-      const userRepo = AppDataSource.getRepository(User);
-
-      // No permitir eliminar al propio usuario
-      if (id === req.session.userId) {
-        return res.status(400).json({
-          success: false,
-          message: 'No puedes eliminar tu propio usuario'
-        });
-      }
-
-      const user = await userRepo.findOne({ where: { id } });
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'Usuario no encontrado'
-        });
-      }
-
-      await userRepo.remove(user);
-
-      res.json({
-        success: true,
-        message: 'Usuario eliminado exitosamente'
-      });
-
+      const { id } = req.params;
+      await prisma.users.delete({ where: { id: parseInt(id) } });
+      res.json({ success: true });
     } catch (error: any) {
-      console.error('Error deleting user:', error);
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 
-  // Actualizar perfil propio
   async updateProfile(req: Request, res: Response) {
     try {
       const userId = req.session.userId;
-      const { fullName, email, currentPassword, newPassword } = req.body;
-
       if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message: 'No autenticado'
-        });
+        return res.status(401).json({ success: false, message: 'No autenticado' });
       }
 
-      const userRepo = AppDataSource.getRepository(User);
-      const user = await userRepo.findOne({ where: { id: userId } });
+      const { fullName, email } = req.body;
 
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: 'Usuario no encontrado'
-        });
-      }
-
-      // Verificar contraseña actual si se quiere cambiar la contraseña
-      if (newPassword) {
-        if (!currentPassword) {
-          return res.status(400).json({
-            success: false,
-            message: 'Debes proporcionar la contraseña actual'
-          });
-        }
-
-        const passwordValid = await bcrypt.compare(currentPassword, 
-user.password);
-        if (!passwordValid) {
-          return res.status(401).json({
-            success: false,
-            message: 'Contraseña actual incorrecta'
-          });
-        }
-      }
-
-      // Si se cambia el email, verificar que no exista
-      if (email && email !== user.email) {
-        const existingUser = await userRepo.findOne({ where: { email } });
-        if (existingUser) {
-          return res.status(400).json({
-            success: false,
-            message: 'El email ya está registrado'
-          });
-        }
-        user.email = email;
-      }
-
-      if (fullName) user.fullName = fullName;
-      
-      if (newPassword) {
-        user.password = await bcrypt.hash(newPassword, 10);
-      }
-
-      await userRepo.save(user);
-
-      res.json({
-        success: true,
-        message: 'Perfil actualizado exitosamente',
-        data: {
-          id: user.id,
-          email: user.email,
-          fullName: user.fullName,
-          role: user.role
-        }
+      const user = await prisma.users.update({
+        where: { id: userId },
+        data: { full_name: fullName, email },
+        select: { id: true, email: true, full_name: true, role: true }
       });
 
+      res.json({ success: true, data: user });
     } catch (error: any) {
-      console.error('Error updating profile:', error);
-      res.status(500).json({
-        success: false,
-        message: error.message
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 }
