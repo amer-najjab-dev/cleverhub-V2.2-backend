@@ -8,18 +8,21 @@ datasource db {
 }
 
 model users {
-  id                Int                     @id @default(autoincrement())
-  email             String                  @unique @map("email") @db.VarChar(255)
-  full_name         String?                 @map("full_name") @db.VarChar(255)
-  role              String?                 @default("employee") @map("role") @db.VarChar(50)
-  is_active         Boolean?                @default(true) @map("is_active")
-  created_at        DateTime?               @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at        DateTime?               @default(now()) @map("updated_at") @db.Timestamp(6)
-  password          String?                 @map("password") @db.VarChar(255)
-  ai_messages       ai_generated_messages[]
+  model users {
+  id        Int      @id @default(autoincrement()) @map("id")  // CAMBIA ESTO TEMPORALMENTE
+  email     String   @unique @map("email")
+  full_name String?  @map("full_name")
+  role      String?  @default("employee") @map("role")
+  is_active Boolean? @default(true) @map("is_active")
+  password  String?  @map("password")
+  created_at DateTime? @default(now()) @map("created_at")
+  updated_at DateTime? @default(now()) @map("updated_at")
+
+  // relaciones
+  sales sales[]
+  ai_messages ai_generated_messages[]
   message_campaigns message_campaigns[]
   message_templates message_templates[]
-  sales             sales[]
 
   @@map("users")
 }
