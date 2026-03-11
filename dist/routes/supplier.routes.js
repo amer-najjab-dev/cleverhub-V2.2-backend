@@ -1,12 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// src/routes/supplier.routes.ts
 const express_1 = require("express");
 const supplier_controller_1 = require("../controllers/supplier.controller");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
-// Todas las rutas requieren autenticación
 router.use(auth_1.requireAuth);
-// ========== CRUD PROVEEDORES ==========
 router.get('/', supplier_controller_1.supplierController.getAll.bind(supplier_controller_1.supplierController));
 router.get('/search', supplier_controller_1.supplierController.search.bind(supplier_controller_1.supplierController));
 router.get('/:id', supplier_controller_1.supplierController.getById.bind(supplier_controller_1.supplierController));

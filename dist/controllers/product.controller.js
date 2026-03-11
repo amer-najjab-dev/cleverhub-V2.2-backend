@@ -1,69 +1,86 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.productController = exports.ProductoController = void 0;
-const data_source_1 = require("../data-source");
-const Product_1 = require("../entities/Product");
-const typeorm_1 = require("typeorm");
-class ProductoController {
+exports.productController = exports.ProductController = void 0;
+const server_1 = require("../server");
+class ProductController {
     async listar(req, res) {
         try {
-            const products = await data_source_1.AppDataSource.getRepository(Product_1.Product).find();
-            res.json(products);
+            const { q, category, page = 1, limit = 20 } = req.query;
+            const skip = (Number(page) - 1) * Number(limit);
+            const where = { active: true };
+            if (q) {
+                where.name = { contains: q, mode: 'insensitive' };
+            }
+            if (category) {
+                where.category = category;
+            }
+            const [products, total] = await Promise.all([
+                server_1.prisma.products.findMany({
+                    where,
+                    skip,
+                    take: Number(limit),
+                    orderBy: { name: 'asc' }
+                }),
+                server_1.prisma.products.count({ where })
+            ]);
+            res.json({
+                success: true,
+                data: products,
+                meta: { total, page: Number(page), limit: Number(limit), totalPages: Math.ceil(total / Number(limit)) }
+            });
         }
         catch (error) {
-            res.status(500).json({ error: error.message });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
     async obtenerPorId(req, res) {
         try {
-            const id = parseInt(req.params.id);
-            const product = await data_source_1.AppDataSource.getRepository(Product_1.Product).findOne({
-                where: { id },
-                relations: ['priceHistories', 'inventoryLots', 'stockMovements', 'stockMovements.lot']
+            const { id } = req.params;
+            const product = await server_1.prisma.products.findUnique({
+                where: { id: parseInt(id) }
             });
-            if (!product)
-                return res.status(404).json({ error: 'Producto no encontrado' });
-            res.json(product);
+            if (!product) {
+                return res.status(404).json({ success: false, message: 'Producto no encontrado' });
+            }
+            res.json({ success: true, data: product });
         }
         catch (error) {
-            res.status(500).json({ error: error.message });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
     async buscar(req, res) {
         try {
-            const query = req.query.q || '';
-            const where = query
-                ? [
-                    { name: (0, typeorm_1.Like)(`%${query}%`) },
-                    { description: (0, typeorm_1.Like)(`%${query}%`) },
-                    { category: (0, typeorm_1.Like)(`%${query}%`) },
-                    { sku: (0, typeorm_1.Like)(`%${query}%`) }
-                ]
-                : {};
-            const products = await data_source_1.AppDataSource.getRepository(Product_1.Product).find({
-                where,
-                order: { name: 'ASC' }
+            const { q } = req.query;
+            if (!q)
+                return res.json({ success: true, data: [] });
+            const products = await server_1.prisma.products.findMany({
+                where: {
+                    name: { contains: q, mode: 'insensitive' },
+                    active: true
+                },
+                take: 20,
+                orderBy: { name: 'asc' }
             });
-            res.json(products);
+            res.json({ success: true, data: products });
         }
         catch (error) {
-            res.status(500).json({ error: error.message });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
-    // Método adicional si quieres obtener solo el historial de precios de un producto
     async getPriceHistory(req, res) {
         try {
-            const id = parseInt(req.params.id);
-            const priceHistory = await data_source_1.AppDataSource.getRepository('PriceHistory').find({
-                where: { product: { id } },
-                order: { date: 'DESC' }
+            const { id } = req.params;
+            const history = await server_1.prisma.price_history.findMany({
+                where: { product_id: parseInt(id) },
+                orderBy: { date: 'desc' },
+                take: 10
             });
-            res.json(priceHistory);
+            res.json({ success: true, data: history });
         }
         catch (error) {
-            res.status(500).json({ error: error.message });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
 }
-exports.ProductoController = ProductoController;
-exports.productController = new ProductoController();
+exports.ProductController = ProductController;
+exports.productController = new ProductController();

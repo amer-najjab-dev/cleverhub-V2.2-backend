@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.aiMessageGeneratorService = exports.AIMessageGeneratorService = void 0;
-// backend/src/services/aiMessageGenerator.service.ts
 const data_source_1 = require("../data-source");
 const Product_1 = require("../entities/Product");
 const AIGeneratedMessage_1 = require("../entities/AIGeneratedMessage");
@@ -36,15 +35,13 @@ class AIMessageGeneratorService {
         }
         // Guardar mensajes generados
         for (const msg of messages) {
-            const aiMessage = new AIGeneratedMessage_1.AIGeneratedMessage();
-            aiMessage.tone = msg.tone;
-            aiMessage.message = msg.message;
-            aiMessage.productId = productId;
-            // ✅ CORREGIDO: Ahora acepta number | null | undefined
-            aiMessage.pointsCost = pointsCost ?? null;
-            aiMessage.createdBy = userId ?? null;
-            aiMessage.usageCount = 0;
-            aiMessage.likeCount = 0;
+            const aiMessage = this.messageRepo.create({
+                tone: msg.tone,
+                message: msg.message,
+                productId,
+                pointsCost,
+                createdById: userId || 1
+            });
             await this.messageRepo.save(aiMessage);
         }
         return messages;
@@ -73,7 +70,7 @@ class AIMessageGeneratorService {
             where: { productId },
             order: { createdAt: 'DESC' },
             take: limit,
-            relations: ['createdByUser']
+            relations: ['createdBy']
         });
     }
     // Registrar uso de mensaje

@@ -1,20 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dashboardController = exports.DashboardController = void 0;
-const data_source_1 = require("../data-source");
-const Sale_1 = require("../entities/Sale");
-const SaleItem_1 = require("../entities/SaleItem");
-const Product_1 = require("../entities/Product");
-const typeorm_1 = require("typeorm");
+const server_1 = require("../server");
 class DashboardController {
-    /**
-     * Obtener KPIs principales del dashboard
-     * GET /api/dashboard/kpis?period=today|week|month
-     */
     async getKPIs(req, res) {
         try {
             const { period = 'today' } = req.query;
-            // Calcular fechas según período
             const now = new Date();
             let startDate;
             switch (period) {
@@ -30,58 +21,50 @@ class DashboardController {
                 default:
                     startDate = new Date(now.setHours(0, 0, 0, 0));
             }
-            const saleRepo = data_source_1.AppDataSource.getRepository(Sale_1.Sale);
             // Ventas del período actual
-            const currentPeriodSales = await saleRepo.find({
+            const currentPeriodSales = await server_1.prisma.sales.findMany({
                 where: {
-                    createdAt: (0, typeorm_1.MoreThan)(startDate),
-                    saleStatus: 'completed'
+                    created_at: { gte: startDate },
+                    sale_status: 'completed'
                 }
             });
-            // Ventas del período anterior (para calcular crecimiento)
+            // Ventas del período anterior
             const periodLength = now.getTime() - startDate.getTime();
             const previousStartDate = new Date(startDate.getTime() - periodLength);
-            const previousPeriodSales = await saleRepo.find({
+            const previousPeriodSales = await server_1.prisma.sales.findMany({
                 where: {
-                    createdAt: (0, typeorm_1.Between)(previousStartDate, startDate),
-                    saleStatus: 'completed'
+                    created_at: { gte: previousStartDate, lt: startDate },
+                    sale_status: 'completed'
                 }
             });
-            // Calcular totales
             const todaySales = currentPeriodSales.reduce((sum, sale) => sum + Number(sale.total), 0);
             const previousTotal = previousPeriodSales.reduce((sum, sale) => sum + Number(sale.total), 0);
-            // Calcular ticket medio
             const averageTicket = currentPeriodSales.length > 0
                 ? todaySales / currentPeriodSales.length
                 : 0;
-            // Contar productos con stock bajo
-            const productRepo = data_source_1.AppDataSource.getRepository(Product_1.Product);
-            const lowStockCount = await productRepo.count({
+            const lowStockCount = await server_1.prisma.products.count({
                 where: {
-                    stock: (0, typeorm_1.LessThan)(10),
+                    stock: { lt: 10 },
                     active: true
                 }
             });
-            // Calcular crecimiento
             const growth = previousTotal > 0
                 ? ((todaySales - previousTotal) / previousTotal) * 100
                 : 0;
-            // Calcular beneficio total (opcional)
-            const saleItemRepo = data_source_1.AppDataSource.getRepository(SaleItem_1.SaleItem);
-            const items = await saleItemRepo
-                .createQueryBuilder('item')
-                .leftJoin('item.sale', 'sale')
-                .where('sale.createdAt > :startDate', { startDate })
-                .andWhere('sale.saleStatus = :status', { status: 'completed' })
-                .getMany();
-            const totalProfit = items.reduce((sum, item) => sum + Number(item.margin || 0), 0);
-            // Calcular margen promedio
-            const averageMargin = todaySales > 0 ? (totalProfit / todaySales) * 100 : 0;
-            // Contar pedidos pendientes
-            const pendingOrders = await saleRepo.count({
+            const saleItems = await server_1.prisma.sale_items.findMany({
                 where: {
-                    paymentStatus: 'pending',
-                    saleStatus: 'completed'
+                    sales: {
+                        created_at: { gte: startDate },
+                        sale_status: 'completed'
+                    }
+                }
+            });
+            const totalProfit = saleItems.reduce((sum, item) => sum + Number(item.margin || 0), 0);
+            const averageMargin = todaySales > 0 ? (totalProfit / todaySales) * 100 : 0;
+            const pendingOrders = await server_1.prisma.sales.count({
+                where: {
+                    payment_status: 'pending',
+                    sale_status: 'completed'
                 }
             });
             res.json({
@@ -107,10 +90,6 @@ class DashboardController {
             });
         }
     }
-    /**
-     * Obtener ventas por hora para un día específico
-     * GET /api/dashboard/hourly-sales?date=YYYY-MM-DD
-     */
     async getHourlySales(req, res) {
         try {
             const { date } = req.query;
@@ -118,25 +97,19 @@ class DashboardController {
             targetDate.setHours(0, 0, 0, 0);
             const nextDay = new Date(targetDate);
             nextDay.setDate(nextDay.getDate() + 1);
-            const saleItemRepo = data_source_1.AppDataSource.getRepository(SaleItem_1.SaleItem);
-            // Consulta para obtener ventas agrupadas por hora
-            const hourlyData = await saleItemRepo
-                .createQueryBuilder('item')
-                .leftJoin('item.sale', 'sale')
-                .select('EXTRACT(HOUR FROM sale.createdAt)', 'hour')
-                .addSelect('SUM(item.total)', 'value')
-                .where('sale.createdAt BETWEEN :startDate AND :endDate', {
-                startDate: targetDate,
-                endDate: nextDay
-            })
-                .andWhere('sale.saleStatus = :status', { status: 'completed' })
-                .groupBy('EXTRACT(HOUR FROM sale.createdAt)')
-                .orderBy('hour', 'ASC')
-                .getRawMany();
-            // Formatear resultado para el frontend
+            const hourlyData = await server_1.prisma.$queryRaw `
+        SELECT 
+          EXTRACT(HOUR FROM created_at) as hour,
+          SUM(total) as value
+        FROM sales
+        WHERE created_at BETWEEN ${targetDate} AND ${nextDay}
+          AND sale_status = 'completed'
+        GROUP BY EXTRACT(HOUR FROM created_at)
+        ORDER BY hour ASC
+      `;
             const hours = Array.from({ length: 24 }, (_, i) => i);
             const result = hours.map(hour => {
-                const found = hourlyData.find(d => Number(d.hour) === hour);
+                const found = hourlyData.find((d) => Number(d.hour) === hour);
                 return {
                     hour: `${hour}:00`,
                     value: found ? Number(found.value) : 0
@@ -155,51 +128,37 @@ class DashboardController {
             });
         }
     }
-    /**
-     * Obtener datos comparativos (semana actual vs anterior)
-     * GET /api/dashboard/comparative
-     */
     async getComparativeData(req, res) {
         try {
             const now = new Date();
-            // Semana actual (últimos 7 días)
             const weekStart = new Date(now);
             weekStart.setDate(now.getDate() - 7);
-            // Semana anterior (7 días antes de weekStart)
             const previousWeekStart = new Date(weekStart);
             previousWeekStart.setDate(weekStart.getDate() - 7);
-            const saleRepo = data_source_1.AppDataSource.getRepository(Sale_1.Sale);
-            // Obtener ventas de la semana actual agrupadas por día
-            const currentWeekSales = await saleRepo
-                .createQueryBuilder('sale')
-                .select('EXTRACT(DOW FROM sale.createdAt)', 'dayOfWeek')
-                .addSelect('SUM(sale.total)', 'total')
-                .where('sale.createdAt BETWEEN :start AND :now', {
-                start: weekStart,
-                now
-            })
-                .andWhere('sale.saleStatus = :status', { status: 'completed' })
-                .groupBy('EXTRACT(DOW FROM sale.createdAt)')
-                .getRawMany();
-            // Obtener ventas de la semana anterior agrupadas por día
-            const previousWeekSales = await saleRepo
-                .createQueryBuilder('sale')
-                .select('EXTRACT(DOW FROM sale.createdAt)', 'dayOfWeek')
-                .addSelect('SUM(sale.total)', 'total')
-                .where('sale.createdAt BETWEEN :start AND :end', {
-                start: previousWeekStart,
-                end: weekStart
-            })
-                .andWhere('sale.saleStatus = :status', { status: 'completed' })
-                .groupBy('EXTRACT(DOW FROM sale.createdAt)')
-                .getRawMany();
-            // Días de la semana en español
+            const currentWeekSales = await server_1.prisma.$queryRaw `
+        SELECT 
+          EXTRACT(DOW FROM created_at) as dayOfWeek,
+          SUM(total) as total
+        FROM sales
+        WHERE created_at BETWEEN ${weekStart} AND ${now}
+          AND sale_status = 'completed'
+        GROUP BY EXTRACT(DOW FROM created_at)
+      `;
+            const previousWeekSales = await server_1.prisma.$queryRaw `
+        SELECT 
+          EXTRACT(DOW FROM created_at) as dayOfWeek,
+          SUM(total) as total
+        FROM sales
+        WHERE created_at BETWEEN ${previousWeekStart} AND ${weekStart}
+          AND sale_status = 'completed'
+        GROUP BY EXTRACT(DOW FROM created_at)
+      `;
             const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
             const result = [];
             for (let i = 1; i <= 7; i++) {
                 const dayIndex = i % 7;
-                const currentDay = currentWeekSales.find(d => Number(d.dayOfWeek) === dayIndex);
-                const previousDay = previousWeekSales.find(d => Number(d.dayOfWeek) === dayIndex);
+                const currentDay = currentWeekSales.find((d) => Number(d.dayOfWeek) === dayIndex);
+                const previousDay = previousWeekSales.find((d) => Number(d.dayOfWeek) === dayIndex);
                 result.push({
                     day: dayNames[dayIndex],
                     actual: currentDay ? Number(currentDay.total) : 0,
@@ -219,10 +178,6 @@ class DashboardController {
             });
         }
     }
-    /**
-     * Obtener top productos más vendidos
-     * GET /api/dashboard/top-products?limit=10&period=week
-     */
     async getTopProducts(req, res) {
         try {
             const limit = Number(req.query.limit) || 10;
@@ -239,32 +194,37 @@ class DashboardController {
                 default:
                     startDate = new Date(now.setDate(now.getDate() - 7));
             }
-            const saleItemRepo = data_source_1.AppDataSource.getRepository(SaleItem_1.SaleItem);
-            const topProducts = await saleItemRepo
-                .createQueryBuilder('item')
-                .leftJoin('item.product', 'product')
-                .leftJoin('item.sale', 'sale')
-                .select('product.id', 'id')
-                .addSelect('product.name', 'name')
-                .addSelect('product.category', 'category')
-                .addSelect('SUM(item.quantity)', 'sales')
-                .addSelect('SUM(item.total)', 'revenue')
-                .where('sale.createdAt > :startDate', { startDate })
-                .andWhere('sale.saleStatus = :status', { status: 'completed' })
-                .groupBy('product.id')
-                .addGroupBy('product.name')
-                .addGroupBy('product.category')
-                .orderBy('SUM(item.quantity)', 'DESC')
-                .limit(limit)
-                .getRawMany();
-            // Calcular cambio porcentual (simulado por ahora)
-            const result = topProducts.map((p, index) => ({
-                id: p.id,
-                name: p.name,
-                category: p.category,
-                sales: Number(p.sales),
-                change: Math.floor(Math.random() * 30) - 5,
-                revenue: Number(p.revenue)
+            const topProducts = await server_1.prisma.sale_items.groupBy({
+                by: ['product_id'],
+                where: {
+                    sales: {
+                        created_at: { gte: startDate },
+                        sale_status: 'completed'
+                    }
+                },
+                _sum: {
+                    quantity: true,
+                    total: true
+                },
+                orderBy: {
+                    _sum: {
+                        quantity: 'desc'
+                    }
+                },
+                take: limit
+            });
+            const result = await Promise.all(topProducts.map(async (item) => {
+                const product = await server_1.prisma.products.findUnique({
+                    where: { id: item.product_id }
+                });
+                return {
+                    id: item.product_id,
+                    name: product?.name || 'Unknown',
+                    category: product?.category || 'N/A',
+                    sales: item._sum.quantity || 0,
+                    change: Math.floor(Math.random() * 30) - 5,
+                    revenue: item._sum.total || 0
+                };
             }));
             res.json({
                 success: true,
@@ -279,10 +239,6 @@ class DashboardController {
             });
         }
     }
-    /**
-     * Obtener ticket medio del período
-     * GET /api/dashboard/average-ticket?period=week
-     */
     async getAverageTicket(req, res) {
         try {
             const period = req.query.period || 'week';
@@ -301,11 +257,10 @@ class DashboardController {
                 default:
                     startDate = new Date(now.setDate(now.getDate() - 7));
             }
-            const saleRepo = data_source_1.AppDataSource.getRepository(Sale_1.Sale);
-            const sales = await saleRepo.find({
+            const sales = await server_1.prisma.sales.findMany({
                 where: {
-                    createdAt: (0, typeorm_1.MoreThan)(startDate),
-                    saleStatus: 'completed'
+                    created_at: { gte: startDate },
+                    sale_status: 'completed'
                 }
             });
             const totalSales = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
@@ -323,17 +278,12 @@ class DashboardController {
             });
         }
     }
-    /**
-     * Obtener conteo de productos con stock bajo
-     * GET /api/dashboard/low-stock?threshold=10
-     */
     async getLowStockCount(req, res) {
         try {
             const threshold = Number(req.query.threshold) || 10;
-            const productRepo = data_source_1.AppDataSource.getRepository(Product_1.Product);
-            const count = await productRepo.count({
+            const count = await server_1.prisma.products.count({
                 where: {
-                    stock: (0, typeorm_1.LessThan)(threshold),
+                    stock: { lt: threshold },
                     active: true
                 }
             });
@@ -350,69 +300,87 @@ class DashboardController {
             });
         }
     }
-    /**
-     * Obtener resumen rápido (mejor hora, top producto, top cliente)
-     * GET /api/dashboard/quick-summary
-     */
     async getQuickSummary(req, res) {
         try {
-            const saleRepo = data_source_1.AppDataSource.getRepository(Sale_1.Sale);
-            const saleItemRepo = data_source_1.AppDataSource.getRepository(SaleItem_1.SaleItem);
             const now = new Date();
             const startOfDay = new Date(now.setHours(0, 0, 0, 0));
-            // Mejor hora del día (basado en ventas de hoy)
-            const hourlySales = await saleItemRepo
-                .createQueryBuilder('item')
-                .leftJoin('item.sale', 'sale')
-                .select('EXTRACT(HOUR FROM sale.createdAt)', 'hour')
-                .addSelect('SUM(item.total)', 'value')
-                .where('sale.createdAt > :startOfDay', { startOfDay })
-                .andWhere('sale.saleStatus = :status', { status: 'completed' })
-                .groupBy('EXTRACT(HOUR FROM sale.createdAt)')
-                .orderBy('value', 'DESC')
-                .limit(1)
-                .getRawMany();
-            const bestHour = hourlySales.length > 0
-                ? { hour: `${Number(hourlySales[0].hour)}:00`, value: Number(hourlySales[0].value) }
+            // Mejor hora del día
+            const hourlySales = await server_1.prisma.$queryRaw `
+        SELECT 
+          EXTRACT(HOUR FROM created_at) as hour,
+          SUM(total) as value
+        FROM sales
+        WHERE created_at > ${startOfDay}
+          AND sale_status = 'completed'
+        GROUP BY EXTRACT(HOUR FROM created_at)
+        ORDER BY value DESC
+        LIMIT 1
+      `;
+            const bestHourData = hourlySales[0];
+            const bestHour = bestHourData
+                ? { hour: `${Number(bestHourData.hour)}:00`, value: Number(bestHourData.value) }
                 : { hour: '12:00', value: 0 };
             // Top producto de la semana
             const weekAgo = new Date();
             weekAgo.setDate(weekAgo.getDate() - 7);
-            const topProductData = await saleItemRepo
-                .createQueryBuilder('item')
-                .leftJoin('item.product', 'product')
-                .leftJoin('item.sale', 'sale')
-                .select('product.name', 'name')
-                .addSelect('SUM(item.quantity)', 'sales')
-                .where('sale.createdAt > :weekAgo', { weekAgo })
-                .andWhere('sale.saleStatus = :status', { status: 'completed' })
-                .groupBy('product.name')
-                .orderBy('SUM(item.quantity)', 'DESC')
-                .limit(1)
-                .getRawMany();
-            const topProduct = topProductData.length > 0
-                ? { name: topProductData[0].name, sales: Number(topProductData[0].sales) }
-                : { name: 'Ninguno', sales: 0 };
+            const topProductData = await server_1.prisma.sale_items.groupBy({
+                by: ['product_id'],
+                where: {
+                    sales: {
+                        created_at: { gte: weekAgo },
+                        sale_status: 'completed'
+                    }
+                },
+                _sum: {
+                    quantity: true
+                },
+                orderBy: {
+                    _sum: {
+                        quantity: 'desc'
+                    }
+                },
+                take: 1
+            });
+            let topProduct = { name: 'Ninguno', sales: 0 };
+            if (topProductData.length > 0) {
+                const product = await server_1.prisma.products.findUnique({
+                    where: { id: topProductData[0].product_id }
+                });
+                topProduct = {
+                    name: product?.name || 'Unknown',
+                    sales: topProductData[0]._sum.quantity || 0
+                };
+            }
             // Top cliente del mes
             const monthAgo = new Date();
             monthAgo.setMonth(monthAgo.getMonth() - 1);
-            const topCustomerData = await saleRepo
-                .createQueryBuilder('sale')
-                .leftJoin('sale.client', 'client')
-                .select("CONCAT(client.firstName, ' ', client.lastName)", 'name')
-                .addSelect('SUM(sale.total)', 'total')
-                .where('sale.createdAt > :monthAgo', { monthAgo })
-                .andWhere('sale.saleStatus = :status', { status: 'completed' })
-                .andWhere('client.id IS NOT NULL')
-                .groupBy('client.id')
-                .addGroupBy('client.firstName')
-                .addGroupBy('client.lastName')
-                .orderBy('SUM(sale.total)', 'DESC')
-                .limit(1)
-                .getRawMany();
-            const topCustomer = topCustomerData.length > 0
-                ? { name: topCustomerData[0].name, total: Number(topCustomerData[0].total) }
-                : { name: 'Cliente no registrado', total: 0 };
+            const topCustomerData = await server_1.prisma.sales.groupBy({
+                by: ['client_id'],
+                where: {
+                    created_at: { gte: monthAgo },
+                    sale_status: 'completed',
+                    client_id: { not: null }
+                },
+                _sum: {
+                    total: true
+                },
+                orderBy: {
+                    _sum: {
+                        total: 'desc'
+                    }
+                },
+                take: 1
+            });
+            let topCustomer = { name: 'Cliente no registrado', total: 0 };
+            if (topCustomerData.length > 0 && topCustomerData[0].client_id) {
+                const client = await server_1.prisma.clients.findUnique({
+                    where: { id: topCustomerData[0].client_id }
+                });
+                topCustomer = {
+                    name: client ? `${client.first_name} ${client.last_name}` : 'Cliente no registrado',
+                    total: Number(topCustomerData[0]._sum.total || 0)
+                };
+            }
             res.json({
                 success: true,
                 data: {
