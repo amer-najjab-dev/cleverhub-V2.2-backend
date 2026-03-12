@@ -26,7 +26,7 @@ const pgPool = new Pool({
 });
 
 // Adapter para Prisma
-const adapter = new PrismaPg(pgPool);
+const adapter = new PrismaPg(pgPool as any);
 
 export const prisma = new PrismaClient({
   log: isProd ? ['error'] : ['query', 'info', 'warn', 'error'],

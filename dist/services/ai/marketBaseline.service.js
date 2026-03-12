@@ -34,7 +34,7 @@ class MarketBaselineService {
             laboratory: product.laboratory || undefined,
             expectedMonthlySales: baseline.monthly,
             confidence: baseline.confidence,
-            source: 'market'
+            source: 'market',
         };
     }
     getBaselines(products) {

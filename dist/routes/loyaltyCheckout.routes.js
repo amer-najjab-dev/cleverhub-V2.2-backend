@@ -5,8 +5,10 @@ const loyaltyCheckout_controller_1 = require("../controllers/loyaltyCheckout.con
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.use(auth_1.requireAuth);
-// Obtener recompensas disponibles para un cliente
-router.get('/available/:clientId', loyaltyCheckout_controller_1.loyaltyCheckoutController.getAvailableRewards.bind(loyaltyCheckout_controller_1.loyaltyCheckoutController));
-// Canjear múltiples items
-router.post('/redeem/:clientId', loyaltyCheckout_controller_1.loyaltyCheckoutController.redeemItems.bind(loyaltyCheckout_controller_1.loyaltyCheckoutController));
+// Rutas para checkout de loyalty
+router.get('/client/:clientId/rewards', (req, res) => loyaltyCheckout_controller_1.loyaltyCheckoutController.getAvailableRewards(req, res));
+router.get('/client/:clientId/packs', (req, res) => loyaltyCheckout_controller_1.loyaltyCheckoutController.getAvailablePacks(req, res));
+router.get('/client/:clientId/rewards/:rewardId/validate', (req, res) => loyaltyCheckout_controller_1.loyaltyCheckoutController.validateRewardRedemption(req, res));
+router.get('/client/:clientId/packs/:packId/validate', (req, res) => loyaltyCheckout_controller_1.loyaltyCheckoutController.validatePackRedemption(req, res));
+router.get('/client/:clientId/redemptions', (req, res) => loyaltyCheckout_controller_1.loyaltyCheckoutController.getClientRedemptions(req, res));
 exports.default = router;

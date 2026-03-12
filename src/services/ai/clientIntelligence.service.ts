@@ -94,9 +94,9 @@ export class ClientIntelligenceService {
     if (delayScore > 100) delayScore = 100;
 
     // Score de frecuencia
-    const daysSinceLastPurchase = sales.length > 0
-      ? Math.floor((Date.now() - new Date(sales[0].created_at).getTime()) / (1000 * 60 * 60 * 24))
-      : 365;
+    const daysSinceLastPurchase = sales.length > 0 && sales[0].created_at
+  ? Math.floor((Date.now() - new Date(sales[0].created_at).getTime()) / (1000 * 60 * 60 * 24))
+  : 365;
 
     let frequencyScore = 100;
     if (daysSinceLastPurchase > 180) frequencyScore = 20;
@@ -267,8 +267,10 @@ export class ClientIntelligenceService {
       });
     });
 
-    const firstPurchase = new Date(sales[0].created_at);
-    const lastPurchase = new Date(sales[sales.length - 1].created_at);
+    const firstPurchase = sales[0]?.created_at ? new Date(sales[0].created_at) : new Date();
+    const lastPurchase = sales.length > 0 && sales[sales.length - 1]?.created_at 
+    ? new Date(sales[sales.length - 1].created_at as string | Date) 
+    : new Date();
     const daysDiff = Math.floor((lastPurchase.getTime() - firstPurchase.getTime()) / (1000 * 60 * 60 * 24));
     const avgDaysBetween = sales.length > 1 ? daysDiff / (sales.length - 1) : 0;
 

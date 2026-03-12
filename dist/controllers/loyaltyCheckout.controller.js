@@ -1,112 +1,316 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.loyaltyCheckoutController = exports.LoyaltyCheckoutController = void 0;
-const loyaltyReward_service_1 = require("../services/loyaltyReward.service");
-const data_source_1 = require("../data-source");
-const Client_1 = require("../entities/Client");
-const LoyaltyReward_1 = require("../entities/LoyaltyReward");
-const LoyaltyPack_1 = require("../entities/LoyaltyPack");
+const server_1 = require("../server");
 class LoyaltyCheckoutController {
     // Obtener recompensas disponibles para un cliente
     async getAvailableRewards(req, res) {
         try {
             const { clientId } = req.params;
-            const clientRepo = data_source_1.AppDataSource.getRepository(Client_1.Client);
-            const rewardRepo = data_source_1.AppDataSource.getRepository(LoyaltyReward_1.LoyaltyReward);
-            const packRepo = data_source_1.AppDataSource.getRepository(LoyaltyPack_1.LoyaltyPack);
-            // Obtener puntos del cliente
-            const client = await clientRepo.findOne({ where: { id: parseInt(clientId) } });
+            const client = await server_1.prisma.clients.findUnique({
+                where: { id: parseInt(clientId) },
+            });
             if (!client) {
-                return res.status(404).json({ success: false, message: 'Client non trouvé' });
+                return res.status(404).json({
+                    success: false,
+                    message: 'Client non trouvé',
+                });
             }
-            const clientPoints = client.loyaltyPoints || 0;
-            // Obtener todas las recompensas activas con productos
-            const rewards = await rewardRepo.find({
-                where: { isActive: true },
-                relations: ['product']
-            });
-            // Obtener todos los packs activos con productos
-            const packs = await packRepo.find({
-                where: { isActive: true },
-                relations: ['products']
-            });
-            const available = [];
-            // Filtrar recompensas que el cliente puede pagar
-            for (const reward of rewards) {
-                if (reward.pointsCost <= clientPoints && reward.product?.stock > 0) {
-                    available.push({
-                        id: reward.id,
-                        type: 'reward',
-                        name: reward.product.name,
-                        pointsCost: reward.pointsCost,
-                        productId: reward.productId,
-                        product: {
-                            id: reward.product.id,
-                            name: reward.product.name,
-                            pricePPV: reward.product.pricePPV,
-                            stock: reward.product.stock
+            const rewards = await server_1.prisma.loyalty_reward.findMany({
+                where: {
+                    is_active: true,
+                    AND: [
+                        {
+                            OR: [
+                                { start_date: null },
+                                { start_date: { lte: new Date() } },
+                            ],
                         },
-                        originalValue: parseFloat(reward.product.pricePPV.toString())
-                    });
-                }
-            }
-            // Filtrar packs que el cliente puede pagar
-            for (const pack of packs) {
-                if (pack.pointsCost <= clientPoints) {
-                    // Verificar stock de todos los productos
-                    const hasStock = pack.products.every(p => p.stock > 0);
-                    if (hasStock) {
-                        available.push({
-                            id: pack.id,
-                            type: 'pack',
-                            name: pack.name,
-                            pointsCost: pack.pointsCost,
-                            products: pack.products.map(p => ({
-                                id: p.id,
-                                name: p.name,
-                                pricePPV: p.pricePPV,
-                                stock: p.stock
-                            })),
-                            originalValue: pack.products.reduce((sum, p) => sum + parseFloat(p.pricePPV.toString()), 0)
-                        });
-                    }
-                }
-            }
+                        {
+                            OR: [
+                                { end_date: null },
+                                { end_date: { gte: new Date() } },
+                            ],
+                        },
+                    ],
+                },
+                include: {
+                    product: true,
+                },
+                orderBy: {
+                    points_cost: 'asc',
+                },
+            });
+            const availableRewards = rewards
+                .filter((r) => (client.loyalty_points || 0) >= r.points_cost)
+                .map((r) => ({
+                id: r.id,
+                productId: r.product_id,
+                productName: r.product?.name,
+                productImage: r.product?.imageUrl,
+                pointsCost: r.points_cost,
+                description: r.description,
+                stock: r.product?.stock || 0,
+            }));
+            const unavailableRewards = rewards
+                .filter((r) => (client.loyalty_points || 0) < r.points_cost)
+                .map((r) => ({
+                id: r.id,
+                productId: r.product_id,
+                productName: r.product?.name,
+                pointsCost: r.points_cost,
+                pointsNeeded: r.points_cost - (client.loyalty_points || 0),
+            }));
             res.json({
                 success: true,
-                data: available,
-                clientPoints
+                data: {
+                    clientPoints: client.loyalty_points || 0,
+                    available: availableRewards,
+                    upcoming: unavailableRewards.slice(0, 5),
+                },
             });
         }
         catch (error) {
             console.error('Error getting available rewards:', error);
-            res.status(500).json({ success: false, message: error.message });
+            res.status(500).json({
+                success: false,
+                message: error.message,
+            });
         }
     }
-    // Canjear múltiples items a la vez
-    async redeemItems(req, res) {
+    // Obtener packs disponibles para un cliente
+    async getAvailablePacks(req, res) {
         try {
             const { clientId } = req.params;
-            const { items, saleId } = req.body;
-            const results = [];
-            for (const item of items) {
-                if (item.type === 'reward') {
-                    const result = await loyaltyReward_service_1.loyaltyRewardService.redeemReward(parseInt(clientId), item.id, saleId);
-                    results.push(result);
-                }
-                else if (item.type === 'pack') {
-                    const result = await loyaltyReward_service_1.loyaltyRewardService.redeemPack(parseInt(clientId), item.id, saleId);
-                    results.push(result);
-                }
+            const client = await server_1.prisma.clients.findUnique({
+                where: { id: parseInt(clientId) },
+            });
+            if (!client) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Client non trouvé',
+                });
             }
+            const packs = await server_1.prisma.loyalty_pack.findMany({
+                where: {
+                    is_active: true,
+                    AND: [
+                        {
+                            OR: [
+                                { start_date: null },
+                                { start_date: { lte: new Date() } },
+                            ],
+                        },
+                        {
+                            OR: [
+                                { end_date: null },
+                                { end_date: { gte: new Date() } },
+                            ],
+                        },
+                    ],
+                },
+                include: {
+                    products: {
+                        include: {
+                            product: true,
+                        },
+                    },
+                },
+                orderBy: {
+                    points_cost: 'asc',
+                },
+            });
+            const availablePacks = packs
+                .filter((p) => (client.loyalty_points || 0) >= p.points_cost)
+                .map((p) => ({
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                pointsCost: p.points_cost,
+                imageUrl: p.image_url,
+                products: p.products.map((pp) => ({
+                    id: pp.product.id,
+                    name: pp.product.name,
+                    imageUrl: pp.product.imageUrl,
+                })),
+            }));
             res.json({
                 success: true,
-                data: results
+                data: {
+                    clientPoints: client.loyalty_points || 0,
+                    available: availablePacks,
+                },
             });
         }
         catch (error) {
-            console.error('Error redeeming items:', error);
-            res.status(500).json({ success: false, message: error.message });
+            console.error('Error getting available packs:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message,
+            });
+        }
+    }
+    // Validar si un cliente puede canjear una recompensa
+    async validateRewardRedemption(req, res) {
+        try {
+            const { clientId, rewardId } = req.params;
+            const [client, reward] = await Promise.all([
+                server_1.prisma.clients.findUnique({
+                    where: { id: parseInt(clientId) },
+                }),
+                server_1.prisma.loyalty_reward.findUnique({
+                    where: { id: parseInt(rewardId) },
+                    include: { product: true },
+                }),
+            ]);
+            if (!client) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Client non trouvé',
+                });
+            }
+            if (!reward) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Récompense non trouvée',
+                });
+            }
+            const hasEnoughPoints = (client.loyalty_points || 0) >= reward.points_cost;
+            const hasStock = (reward.product?.stock || 0) > 0;
+            const isActive = reward.is_active;
+            const errors = [];
+            if (!hasEnoughPoints)
+                errors.push('Points insuffisants');
+            if (!hasStock)
+                errors.push('Produit en rupture de stock');
+            if (!isActive)
+                errors.push('Récompense non active');
+            res.json({
+                success: true,
+                data: {
+                    isValid: hasEnoughPoints && hasStock && isActive,
+                    clientPoints: client.loyalty_points || 0,
+                    rewardPoints: reward.points_cost,
+                    hasEnoughPoints,
+                    hasStock,
+                    isActive,
+                    errors,
+                },
+            });
+        }
+        catch (error) {
+            console.error('Error validating redemption:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message,
+            });
+        }
+    }
+    // Validar si un cliente puede canjear un pack
+    async validatePackRedemption(req, res) {
+        try {
+            const { clientId, packId } = req.params;
+            const [client, pack] = await Promise.all([
+                server_1.prisma.clients.findUnique({
+                    where: { id: parseInt(clientId) },
+                }),
+                server_1.prisma.loyalty_pack.findUnique({
+                    where: { id: parseInt(packId) },
+                    include: {
+                        products: {
+                            include: { product: true },
+                        },
+                    },
+                }),
+            ]);
+            if (!client) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Client non trouvé',
+                });
+            }
+            if (!pack) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Pack non trouvé',
+                });
+            }
+            const hasEnoughPoints = (client.loyalty_points || 0) >= pack.points_cost;
+            const hasStock = pack.products.every((p) => p.product.stock > 0);
+            const isActive = pack.is_active;
+            const errors = [];
+            if (!hasEnoughPoints)
+                errors.push('Points insuffisants');
+            if (!hasStock)
+                errors.push('Certains produits sont en rupture de stock');
+            if (!isActive)
+                errors.push('Pack non actif');
+            res.json({
+                success: true,
+                data: {
+                    isValid: hasEnoughPoints && hasStock && isActive,
+                    clientPoints: client.loyalty_points || 0,
+                    packPoints: pack.points_cost,
+                    hasEnoughPoints,
+                    hasStock,
+                    isActive,
+                    errors,
+                    products: pack.products.map((p) => ({
+                        name: p.product.name,
+                        hasStock: p.product.stock > 0,
+                    })),
+                },
+            });
+        }
+        catch (error) {
+            console.error('Error validating pack redemption:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message,
+            });
+        }
+    }
+    // Obtener historial de canjes del cliente
+    async getClientRedemptions(req, res) {
+        try {
+            const { clientId } = req.params;
+            const { limit = 10 } = req.query;
+            const transactions = await server_1.prisma.loyalty_transactions.findMany({
+                where: {
+                    client_id: parseInt(clientId),
+                    type: 'redeemed',
+                },
+                include: {
+                    reward: {
+                        include: { product: true },
+                    },
+                    pack: true,
+                },
+                orderBy: {
+                    created_at: 'desc',
+                },
+                take: Number(limit),
+            });
+            const redemptions = transactions.map((t) => ({
+                id: t.id,
+                date: t.created_at,
+                points: Math.abs(t.points),
+                type: t.reward ? 'reward' : 'pack',
+                name: t.reward?.product?.name || t.pack?.name,
+                reason: t.reason,
+                value: t.product_value,
+            }));
+            res.json({
+                success: true,
+                data: redemptions,
+            });
+        }
+        catch (error) {
+            console.error('Error getting client redemptions:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message,
+            });
         }
     }
 }

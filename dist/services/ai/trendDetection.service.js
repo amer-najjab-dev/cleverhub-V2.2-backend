@@ -1,24 +1,28 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.trendDetectionService = exports.TrendDetectionService = void 0;
-const data_source_1 = require("../../data-source");
-const SaleItem_1 = require("../../entities/SaleItem");
+const server_1 = require("../../server");
 class TrendDetectionService {
-    constructor() {
-        this.saleItemRepo = data_source_1.AppDataSource.getRepository(SaleItem_1.SaleItem);
-    }
     async detectEmergingTrends(days = 7) {
         const endDate = new Date();
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
-        const sales = await this.saleItemRepo
-            .createQueryBuilder('item')
-            .leftJoinAndSelect('item.sale', 'sale')
-            .leftJoinAndSelect('item.product', 'product')
-            .where('sale.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
-            .getMany();
+        const sales = await server_1.prisma.sale_items.findMany({
+            where: {
+                sale: {
+                    created_at: {
+                        gte: startDate,
+                        lte: endDate,
+                    },
+                },
+            },
+            include: {
+                product: true,
+                sale: true,
+            },
+        });
         const labMap = new Map();
-        sales.forEach(sale => {
+        sales.forEach((sale) => {
             const lab = sale.product?.laboratory;
             if (!lab || lab === 'NON RENSEIGNÉ')
                 return;
@@ -26,11 +30,11 @@ class TrendDetectionService {
                 labMap.set(lab, {
                     products: new Set(),
                     productNames: new Set(),
-                    count: 0
+                    count: 0,
                 });
             }
             const labData = labMap.get(lab);
-            labData.products.add(sale.productId);
+            labData.products.add(sale.product_id);
             labData.productNames.add(sale.product?.name || 'Unknown');
             labData.count += sale.quantity;
         });
@@ -54,7 +58,7 @@ class TrendDetectionService {
                     salesCount: data.count,
                     period: days === 7 ? 'week' : 'month',
                     confidence,
-                    recommendation
+                    recommendation,
                 });
             }
         });

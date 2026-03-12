@@ -1,319 +1,346 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.loyaltyRewardService = exports.LoyaltyRewardService = void 0;
-const data_source_1 = require("../data-source");
-const LoyaltyReward_1 = require("../entities/LoyaltyReward");
-const LoyaltyPack_1 = require("../entities/LoyaltyPack");
-const LoyaltyTransaction_1 = require("../entities/LoyaltyTransaction");
-const Product_1 = require("../entities/Product");
-const Client_1 = require("../entities/Client");
-const Sale_1 = require("../entities/Sale");
-const typeorm_1 = require("typeorm");
+const server_1 = require("../server");
 class LoyaltyRewardService {
-    constructor() {
-        this.rewardRepo = data_source_1.AppDataSource.getRepository(LoyaltyReward_1.LoyaltyReward);
-        this.packRepo = data_source_1.AppDataSource.getRepository(LoyaltyPack_1.LoyaltyPack);
-        this.transactionRepo = data_source_1.AppDataSource.getRepository(LoyaltyTransaction_1.LoyaltyTransaction);
-        this.productRepo = data_source_1.AppDataSource.getRepository(Product_1.Product);
-        this.clientRepo = data_source_1.AppDataSource.getRepository(Client_1.Client);
-        this.saleRepo = data_source_1.AppDataSource.getRepository(Sale_1.Sale);
-    }
-    // ========== CATÁLOGO DE RECOMPENSAS ==========
+    // ========== RECOMPENSAS ==========
     async getAllRewards(activeOnly = true) {
         const where = {};
         if (activeOnly) {
-            where.isActive = true;
-            const now = new Date();
-            where.startDate = (0, typeorm_1.LessThan)(now);
-            where.endDate = (0, typeorm_1.MoreThan)(now);
+            where.is_active = true;
         }
-        return this.rewardRepo.find({
+        const rewards = await server_1.prisma.loyalty_reward.findMany({
             where,
-            relations: ['product'],
-            order: { pointsCost: 'ASC' }
+            include: {
+                product: true,
+            },
+            orderBy: {
+                points_cost: 'asc',
+            },
         });
+        return rewards.map((r) => ({
+            id: r.id,
+            productId: r.product_id,
+            productName: r.product?.name,
+            pointsCost: r.points_cost,
+            isActive: r.is_active,
+            description: r.description,
+            imageUrl: r.image_url,
+            maxQuantity: r.max_quantity,
+            startDate: r.start_date,
+            endDate: r.end_date,
+            createdAt: r.created_at,
+            updatedAt: r.updated_at,
+        }));
     }
     async createReward(data) {
-        const product = await this.productRepo.findOne({ where: { id: data.productId } });
-        if (!product)
-            throw new Error('Product not found');
-        const reward = this.rewardRepo.create({
-            productId: data.productId,
-            pointsCost: data.pointsCost,
-            isActive: data.isActive ?? true,
-            description: data.description,
-            maxQuantity: data.maxQuantity,
-            startDate: data.startDate,
-            endDate: data.endDate
+        const reward = await server_1.prisma.loyalty_reward.create({
+            data: {
+                product_id: data.productId,
+                points_cost: data.pointsCost,
+                is_active: data.isActive ?? true,
+                description: data.description,
+                image_url: data.imageUrl,
+                max_quantity: data.maxQuantity,
+                start_date: data.startDate,
+                end_date: data.endDate,
+            },
+            include: {
+                product: true,
+            },
         });
-        return this.rewardRepo.save(reward);
+        return reward;
     }
     async updateReward(id, data) {
-        await this.rewardRepo.update(id, data);
-        const reward = await this.rewardRepo.findOne({ where: { id }, relations: ['product'] });
-        if (!reward)
-            throw new Error('Reward not found');
+        const reward = await server_1.prisma.loyalty_reward.update({
+            where: { id },
+            data: {
+                product_id: data.productId,
+                points_cost: data.pointsCost,
+                is_active: data.isActive,
+                description: data.description,
+                image_url: data.imageUrl,
+                max_quantity: data.maxQuantity,
+                start_date: data.startDate,
+                end_date: data.endDate,
+            },
+            include: {
+                product: true,
+            },
+        });
         return reward;
     }
     async deleteReward(id) {
-        await this.rewardRepo.delete(id);
+        await server_1.prisma.loyalty_reward.delete({
+            where: { id },
+        });
+        return { success: true };
     }
-    // ========== PACKS DE RECOMPENSAS ==========
+    // ========== PACKS ==========
     async getAllPacks(activeOnly = true) {
         const where = {};
         if (activeOnly) {
-            where.isActive = true;
-            const now = new Date();
-            where.startDate = (0, typeorm_1.LessThan)(now);
-            where.endDate = (0, typeorm_1.MoreThan)(now);
+            where.is_active = true;
         }
-        return this.packRepo.find({
+        const packs = await server_1.prisma.loyalty_pack.findMany({
             where,
-            relations: ['products'],
-            order: { pointsCost: 'ASC' }
+            include: {
+                products: {
+                    include: {
+                        product: true,
+                    },
+                },
+            },
+            orderBy: {
+                points_cost: 'asc',
+            },
         });
+        return packs.map((p) => ({
+            id: p.id,
+            name: p.name,
+            description: p.description,
+            pointsCost: p.points_cost,
+            isActive: p.is_active,
+            imageUrl: p.image_url,
+            maxQuantity: p.max_quantity,
+            startDate: p.start_date,
+            endDate: p.end_date,
+            createdAt: p.created_at,
+            updatedAt: p.updated_at,
+            products: p.products.map((pp) => ({
+                productId: pp.product.id,
+                productName: pp.product.name,
+            })),
+        }));
     }
     async createPack(data) {
-        const products = await this.productRepo.findByIds(data.productIds);
-        const pack = this.packRepo.create({
-            name: data.name,
-            description: data.description,
-            pointsCost: data.pointsCost,
-            isActive: data.isActive ?? true,
-            imageUrl: data.imageUrl,
-            maxQuantity: data.maxQuantity,
-            startDate: data.startDate,
-            endDate: data.endDate,
-            products
+        const pack = await server_1.prisma.loyalty_pack.create({
+            data: {
+                name: data.name,
+                description: data.description,
+                points_cost: data.pointsCost,
+                is_active: data.isActive ?? true,
+                image_url: data.imageUrl,
+                max_quantity: data.maxQuantity,
+                start_date: data.startDate,
+                end_date: data.endDate,
+                products: {
+                    create: data.productIds.map((productId) => ({
+                        product_id: productId,
+                    })),
+                },
+            },
+            include: {
+                products: {
+                    include: {
+                        product: true,
+                    },
+                },
+            },
         });
-        return this.packRepo.save(pack);
+        return pack;
     }
-    // ========== CANJE DE PUNTOS ==========
+    // ========== CANJES ==========
     async redeemReward(clientId, rewardId, saleId) {
-        const client = await this.clientRepo.findOne({ where: { id: clientId } });
-        if (!client)
-            throw new Error('Client not found');
-        const reward = await this.rewardRepo.findOne({
-            where: { id: rewardId, isActive: true },
-            relations: ['product']
+        return await server_1.prisma.$transaction(async (tx) => {
+            const reward = await tx.loyalty_reward.findUnique({
+                where: { id: rewardId },
+                include: { product: true },
+            });
+            if (!reward)
+                throw new Error('Récompense non trouvée');
+            const client = await tx.clients.findUnique({
+                where: { id: clientId },
+            });
+            if (!client)
+                throw new Error('Client non trouvé');
+            // Verificar puntos
+            if ((client.loyalty_points || 0) < reward.points_cost) {
+                throw new Error('Points insuffisants');
+            }
+            // Crear transacción
+            const transaction = await tx.loyalty_transactions.create({
+                data: {
+                    client_id: clientId,
+                    points: -reward.points_cost,
+                    type: 'redeemed',
+                    reason: `Canje de recompensa: ${reward.product?.name || 'Producto'}`,
+                    reward_id: rewardId,
+                    sale_id: saleId,
+                    product_value: reward.product?.pricePPV,
+                },
+            });
+            // Actualizar puntos del cliente
+            await tx.clients.update({
+                where: { id: clientId },
+                data: {
+                    loyalty_points: {
+                        decrement: reward.points_cost,
+                    },
+                },
+            });
+            return transaction;
         });
-        if (!reward)
-            throw new Error('Reward not available');
-        // Verificar puntos suficientes
-        if ((client.loyaltyPoints || 0) < reward.pointsCost) {
-            throw new Error('Insufficient points');
-        }
-        // Verificar stock del producto
-        if (reward.product.stock < 1) {
-            throw new Error('Product out of stock');
-        }
-        // Crear transacción
-        const transaction = this.transactionRepo.create({
-            clientId,
-            points: -reward.pointsCost,
-            type: 'redeemed',
-            reason: `Canje de ${reward.product.name}`,
-            rewardId: reward.id,
-            saleId,
-            productValue: reward.product.pricePPV
-        });
-        // Actualizar puntos del cliente
-        client.loyaltyPoints = (client.loyaltyPoints || 0) - reward.pointsCost;
-        // Reducir stock
-        reward.product.stock -= 1;
-        await data_source_1.AppDataSource.transaction(async (manager) => {
-            await manager.save(client);
-            await manager.save(reward.product);
-            await manager.save(transaction);
-        });
-        return {
-            success: true,
-            transaction,
-            newBalance: client.loyaltyPoints
-        };
     }
     async redeemPack(clientId, packId, saleId) {
-        const client = await this.clientRepo.findOne({ where: { id: clientId } });
-        if (!client)
-            throw new Error('Client not found');
-        const pack = await this.packRepo.findOne({
-            where: { id: packId, isActive: true },
-            relations: ['products']
-        });
-        if (!pack)
-            throw new Error('Pack not available');
-        // Verificar puntos suficientes
-        if ((client.loyaltyPoints || 0) < pack.pointsCost) {
-            throw new Error('Insufficient points');
-        }
-        // Verificar stock de todos los productos
-        for (const product of pack.products) {
-            if (product.stock < 1) {
-                throw new Error(`Product ${product.name} out of stock`);
+        return await server_1.prisma.$transaction(async (tx) => {
+            const pack = await tx.loyalty_pack.findUnique({
+                where: { id: packId },
+                include: {
+                    products: {
+                        include: { product: true },
+                    },
+                },
+            });
+            if (!pack)
+                throw new Error('Pack non trouvé');
+            const client = await tx.clients.findUnique({
+                where: { id: clientId },
+            });
+            if (!client)
+                throw new Error('Client non trouvé');
+            if ((client.loyalty_points || 0) < pack.points_cost) {
+                throw new Error('Points insuffisants');
             }
-        }
-        // Crear transacción
-        const totalValue = pack.products.reduce((sum, p) => sum + Number(p.pricePPV), 0);
-        const transaction = this.transactionRepo.create({
-            clientId,
-            points: -pack.pointsCost,
-            type: 'redeemed',
-            reason: `Canje de pack: ${pack.name}`,
-            packId: pack.id,
-            saleId,
-            productValue: totalValue
+            // Calcular valor total del pack
+            const totalValue = pack.products.reduce((sum, p) => sum + Number(p.product.pricePPV), 0);
+            // Crear transacción
+            const transaction = await tx.loyalty_transactions.create({
+                data: {
+                    client_id: clientId,
+                    points: -pack.points_cost,
+                    type: 'redeemed',
+                    reason: `Canje de pack: ${pack.name}`,
+                    pack_id: packId,
+                    sale_id: saleId,
+                    product_value: totalValue,
+                },
+            });
+            // Actualizar puntos
+            await tx.clients.update({
+                where: { id: clientId },
+                data: {
+                    loyalty_points: {
+                        decrement: pack.points_cost,
+                    },
+                },
+            });
+            return transaction;
         });
-        // Actualizar puntos del cliente
-        client.loyaltyPoints = (client.loyaltyPoints || 0) - pack.pointsCost;
-        // Reducir stock de todos los productos
-        for (const product of pack.products) {
-            product.stock -= 1;
-        }
-        await data_source_1.AppDataSource.transaction(async (manager) => {
-            await manager.save(client);
-            await manager.save(pack.products);
-            await manager.save(transaction);
-        });
-        return {
-            success: true,
-            transaction,
-            newBalance: client.loyaltyPoints
-        };
     }
-    // ========== REPORTES DE PUNTOS ==========
+    // ========== REPORTES ==========
     async getLoyaltyClosure(date) {
         const startOfDay = new Date(date);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
-        // Ventas reales (no puntos)
-        const realSales = await this.saleRepo
-            .createQueryBuilder('sale')
-            .where('sale.createdAt BETWEEN :start AND :end', { start: startOfDay, end: endOfDay })
-            .andWhere('sale.paymentMethod != :pointsMethod', { pointsMethod: 'points' })
-            .getMany();
-        const realSalesTotal = realSales.reduce((sum, s) => sum + Number(s.total), 0);
-        // Transacciones de puntos
-        const transactions = await this.transactionRepo.find({
+        const transactions = await server_1.prisma.loyalty_transactions.findMany({
             where: {
-                createdAt: (0, typeorm_1.Between)(startOfDay, endOfDay)
+                created_at: {
+                    gte: startOfDay,
+                    lte: endOfDay,
+                },
             },
-            relations: ['client', 'reward', 'pack', 'sale']
+            include: {
+                client: true,
+                reward: {
+                    include: { product: true },
+                },
+                pack: true,
+            },
         });
-        const pointsIssued = transactions
-            .filter(t => t.type === 'earned' || t.type === 'bonus')
+        const earnedPoints = transactions
+            .filter((t) => t.type === 'earned' || t.type === 'bonus')
             .reduce((sum, t) => sum + t.points, 0);
-        const pointsRedeemed = transactions
-            .filter(t => t.type === 'redeemed')
+        const redeemedPoints = transactions
+            .filter((t) => t.type === 'redeemed')
             .reduce((sum, t) => sum + Math.abs(t.points), 0);
-        const pointsValueMoved = transactions
-            .filter(t => t.type === 'redeemed')
-            .reduce((sum, t) => sum + Number(t.productValue || 0), 0);
+        const redeemedValue = transactions
+            .filter((t) => t.type === 'redeemed')
+            .reduce((sum, t) => sum + Number(t.product_value || 0), 0);
         return {
-            realSales: realSalesTotal,
-            pointsValueMoved,
-            pointsIssued,
-            pointsRedeemed,
-            transactions
+            date: startOfDay.toISOString().split('T')[0],
+            summary: {
+                totalTransactions: transactions.length,
+                earnedPoints,
+                redeemedPoints,
+                netPoints: earnedPoints - redeemedPoints,
+                redeemedValue,
+            },
+            transactions: transactions.map((t) => ({
+                id: t.id,
+                clientName: `${t.client?.first_name || ''} ${t.client?.last_name || ''}`.trim(),
+                points: t.points,
+                type: t.type,
+                reason: t.reason,
+                productName: t.reward?.product?.name || t.pack?.name,
+                createdAt: t.created_at,
+            })),
         };
     }
     // ========== IA STRATEGIST ==========
     async getPromotionSuggestions() {
-        const threeMonthsFromNow = new Date();
-        threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
-        // Productos próximos a caducar (90 días)
-        const expiringProducts = await this.productRepo
-            .createQueryBuilder('product')
-            .where('product.expirationDate <= :date', { date: threeMonthsFromNow })
-            .andWhere('product.stock > 5')
-            .andWhere('product.laboratory IN (:...labs)', { labs: ['Hypermedic', 'Lodimed'] })
-            .getMany();
-        // Productos de baja rotación (menos de 5 ventas en 30 días)
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const lowRotationProducts = await this.productRepo
-            .createQueryBuilder('product')
-            .leftJoin('product.saleItems', 'items')
-            .leftJoin('items.sale', 'sale')
-            .where('sale.createdAt >= :date OR sale.createdAt IS NULL', { date: thirtyDaysAgo })
-            .groupBy('product.id')
-            .having('COALESCE(SUM(items.quantity), 0) < 5')
-            .andWhere('product.stock > 10')
-            .andWhere('product.laboratory IN (:...labs)', { labs: ['Hypermedic', 'Lodimed'] })
-            .getMany();
+        const [rewards, packs] = await Promise.all([
+            this.getAllRewards(true),
+            this.getAllPacks(true),
+        ]);
+        const transactions = await server_1.prisma.loyalty_transactions.findMany({
+            where: {
+                created_at: {
+                    gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Últimos 30 días
+                },
+            },
+            include: {
+                reward: {
+                    include: { product: true },
+                },
+                pack: true,
+            },
+        });
+        const redeemedCount = {};
+        transactions.forEach((t) => {
+            if (t.reward_id) {
+                redeemedCount[t.reward_id] = (redeemedCount[t.reward_id] || 0) + 1;
+            }
+        });
         const suggestions = [];
-        // Sugerencias para productos próximos a caducar
-        for (const product of expiringProducts) {
-            const daysToExpiry = Math.ceil((product.expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-            suggestions.push({
-                type: 'expiring',
-                productId: product.id,
-                productName: product.name,
-                laboratory: product.laboratory,
-                stock: product.stock,
-                daysToExpiry,
-                suggestedPoints: Math.floor(product.pricePPV / 10), // 1 punto por cada 10 DHS
-                targetTier: 'Or',
-                message: `🎯 IA Strategist: Tienes ${product.stock} unidades de ${product.name} que caducan en ${daysToExpiry} días. ¿Quieres crear una promoción de canje por ${Math.floor(product.pricePPV / 10)} puntos para clientes nivel "Or"?`
-            });
-        }
-        // Sugerencias para productos de baja rotación
-        for (const product of lowRotationProducts) {
-            suggestions.push({
-                type: 'lowRotation',
-                productId: product.id,
-                productName: product.name,
-                laboratory: product.laboratory,
-                stock: product.stock,
-                suggestedPoints: Math.floor(product.pricePPV * 0.7 / 10), // 30% de descuento
-                targetTier: 'Argent',
-                message: `💡 IA Strategist: ${product.name} tiene baja rotación (stock: ${product.stock}). Ofrécelo por ${Math.floor(product.pricePPV * 0.7 / 10)} puntos a clientes nivel "Argent" para liberar espacio.`
-            });
-        }
-        return suggestions;
-    }
-    // ========== CAMPAÑAS AUTOMÁTICAS ==========
-    async getWeeklyStrategy() {
-        const clients = await this.clientRepo
-            .createQueryBuilder('client')
-            .leftJoinAndSelect('client.sales', 'sales')
-            .where('client.loyalty_points IS NOT NULL')
-            .getMany();
-        const nearOrClients = [];
-        for (const client of clients) {
-            const points = client.loyaltyPoints || 0;
-            const tier = this.calculateTier(points);
-            if (tier === 'Argent') {
-                const pointsToOr = 5000 - points; // Suponiendo que Or = 5000 puntos
-                if (pointsToOr <= 100) {
-                    nearOrClients.push({
-                        clientId: client.id,
-                        clientName: `${client.firstName} ${client.lastName}`,
-                        phone: client.phone,
-                        currentPoints: points,
-                        pointsToOr,
-                        suggestedBonus: 100
+        // Sugerencias para recompensas populares
+        for (const [rewardId, count] of Object.entries(redeemedCount)) {
+            if (count > 5) {
+                const reward = rewards.find((r) => r.id === parseInt(rewardId));
+                if (reward) {
+                    suggestions.push({
+                        type: 'reward',
+                        id: parseInt(rewardId),
+                        name: reward.productName,
+                        reason: `Canjeado ${count} veces en los últimos 30 días`,
+                        action: 'Considerar aumentar stock o crear promoción similar',
                     });
                 }
             }
         }
+        return suggestions;
+    }
+    async getWeeklyStrategy() {
+        const [closure, suggestions] = await Promise.all([
+            this.getLoyaltyClosure(new Date()),
+            this.getPromotionSuggestions(),
+        ]);
+        const activeRewards = await this.getAllRewards(true);
+        const activePacks = await this.getAllPacks(true);
         return {
             weekOf: new Date().toISOString().split('T')[0],
-            nearOrCount: nearOrClients.length,
-            nearOrClients,
-            strategy: `🎁 Esta semana, ${nearOrClients.length} clientes de nivel 'Argent' están a menos de 100 puntos de ser 'Or'. Envíales un WhatsApp ofreciendo 100 puntos de regalo si compran algo de la marca Hypermedic hoy.`,
-            campaigns: nearOrClients.map(c => ({
-                clientId: c.clientId,
-                message: `Hola ${c.clientName}, ¡estás a solo ${c.pointsToOr} puntos de alcanzar el nivel OR! Esta semana, por cada compra de productos Hypermedic, recibirás 100 puntos de regalo. ¡Aprovecha!`
-            }))
+            summary: {
+                activeRewards: activeRewards.length,
+                activePacks: activePacks.length,
+                pointsEarnedThisWeek: closure.summary.earnedPoints,
+                pointsRedeemedThisWeek: closure.summary.redeemedPoints,
+                valueRedeemedThisWeek: closure.summary.redeemedValue,
+            },
+            suggestions,
+            featuredRewards: activeRewards.slice(0, 3),
+            featuredPacks: activePacks.slice(0, 3),
         };
-    }
-    calculateTier(points) {
-        if (points >= 5000)
-            return 'Or';
-        if (points >= 2000)
-            return 'Argent';
-        return 'Bronze';
     }
 }
 exports.LoyaltyRewardService = LoyaltyRewardService;

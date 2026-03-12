@@ -150,7 +150,7 @@ export class CampaignController {
         const personalizedMessage = aiMessageGeneratorService.personalizeMessage(
           template.content,
           recipient,
-          template.variables || {}
+          (template.variables as Record<string, string>) || {}
         );
 
         await prisma.message_recipients.create({

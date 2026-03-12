@@ -30,7 +30,7 @@ export class VentaController {
           payment_method: paymentMethod,
           payment_status: 'paid',
           sale_status: 'completed',
-          items: {
+          sale_items: {
             create: items.map((item: any) => ({
               product_id: item.productId,
               quantity: item.quantity,
@@ -43,7 +43,7 @@ export class VentaController {
           }
         },
         include: {
-          items: true,
+          sale_items: true,
           client: true,
           user: true
         }
@@ -68,7 +68,7 @@ export class VentaController {
       const venta = await prisma.sales.findUnique({
         where: { id },
         include: {
-          items: {
+          sale_items: {
             include: {
               product: true
             }
@@ -126,7 +126,7 @@ export class VentaController {
         include: {
           client: true,
           user: true,
-          items: {
+          sale_items: {
             include: {
               product: true
             }

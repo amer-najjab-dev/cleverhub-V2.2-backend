@@ -53,7 +53,7 @@ class DashboardController {
                 : 0;
             const saleItems = await server_1.prisma.sale_items.findMany({
                 where: {
-                    sales: {
+                    sale: {
                         created_at: { gte: startDate },
                         sale_status: 'completed'
                     }
@@ -197,7 +197,7 @@ class DashboardController {
             const topProducts = await server_1.prisma.sale_items.groupBy({
                 by: ['product_id'],
                 where: {
-                    sales: {
+                    sale: {
                         created_at: { gte: startDate },
                         sale_status: 'completed'
                     }
@@ -221,7 +221,7 @@ class DashboardController {
                     id: item.product_id,
                     name: product?.name || 'Unknown',
                     category: product?.category || 'N/A',
-                    sales: item._sum.quantity || 0,
+                    sale: item._sum.quantity || 0,
                     change: Math.floor(Math.random() * 30) - 5,
                     revenue: item._sum.total || 0
                 };
@@ -326,7 +326,7 @@ class DashboardController {
             const topProductData = await server_1.prisma.sale_items.groupBy({
                 by: ['product_id'],
                 where: {
-                    sales: {
+                    sale: {
                         created_at: { gte: weekAgo },
                         sale_status: 'completed'
                     }
@@ -341,14 +341,14 @@ class DashboardController {
                 },
                 take: 1
             });
-            let topProduct = { name: 'Ninguno', sales: 0 };
+            let topProduct = { name: 'Ninguno', sale: 0 };
             if (topProductData.length > 0) {
                 const product = await server_1.prisma.products.findUnique({
                     where: { id: topProductData[0].product_id }
                 });
                 topProduct = {
                     name: product?.name || 'Unknown',
-                    sales: topProductData[0]._sum.quantity || 0
+                    sale: topProductData[0]._sum.quantity || 0
                 };
             }
             // Top cliente del mes

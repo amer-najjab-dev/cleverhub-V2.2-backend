@@ -1,52 +1,49 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.clientIntelligenceService = exports.ClientIntelligenceService = void 0;
-const data_source_1 = require("../../data-source");
-const Client_1 = require("../../entities/Client");
-const Sale_1 = require("../../entities/Sale");
-const Payment_1 = require("../../entities/Payment");
+const server_1 = require("../../server");
 class ClientIntelligenceService {
-    constructor() {
-        this.clientRepo = data_source_1.AppDataSource.getRepository(Client_1.Client);
-        this.saleRepo = data_source_1.AppDataSource.getRepository(Sale_1.Sale);
-        this.paymentRepo = data_source_1.AppDataSource.getRepository(Payment_1.Payment);
-    }
     // Calcular score de riesgo para un cliente
     async calculateRiskScore(clientId) {
-        const client = await this.clientRepo.findOne({ where: { id: clientId } });
+        const client = await server_1.prisma.clients.findUnique({
+            where: { id: clientId },
+        });
         if (!client)
             throw new Error('Client not found');
         // Obtener compras del cliente
-        const sales = await this.saleRepo.find({
-            where: { clientId: client.id },
-            order: { createdAt: 'DESC' }
+        const sales = await server_1.prisma.sales.findMany({
+            where: { client_id: clientId },
+            orderBy: { created_at: 'desc' },
         });
-        const payments = await this.paymentRepo.find({
-            where: { sale: { clientId: client.id } },
-            relations: ['sale']
+        const payments = await server_1.prisma.payments.findMany({
+            where: {
+                sale: {
+                    client_id: clientId,
+                },
+            },
+            include: {
+                sale: true,
+            },
         });
         // Calcular métricas básicas
         const totalPurchases = sales.length;
         const totalSpent = sales.reduce((sum, s) => sum + Number(s.total), 0);
         const averageTicket = totalPurchases > 0 ? totalSpent / totalPurchases : 0;
-        // Score de pago (basado en pagos puntuales)
+        // Score de pago
         let paymentScore = 100;
         let delayScore = 0;
         if (payments.length > 0) {
-            const onTimePayments = payments.filter(p => {
-                // Simplificación: asumimos que si hay pago, fue puntual
-                return p.status === 'completed';
-            });
+            const onTimePayments = payments.filter((p) => p.status === 'completed');
             paymentScore = (onTimePayments.length / payments.length) * 100;
         }
-        // Score de retraso (basado en facturas pendientes)
-        const pendingSales = sales.filter(s => s.paymentStatus === 'pending');
-        delayScore = pendingSales.length * 20; // Cada factura pendiente suma 20 puntos
+        // Score de retraso
+        const pendingSales = sales.filter((s) => s.payment_status === 'pending');
+        delayScore = pendingSales.length * 20;
         if (delayScore > 100)
             delayScore = 100;
-        // Score de frecuencia (clientes que compran poco tienen más riesgo)
-        const daysSinceLastPurchase = sales.length > 0
-            ? Math.floor((Date.now() - new Date(sales[0].createdAt).getTime()) / (1000 * 60 * 60 * 24))
+        // Score de frecuencia
+        const daysSinceLastPurchase = sales.length > 0 && sales[0].created_at
+            ? Math.floor((Date.now() - new Date(sales[0].created_at).getTime()) / (1000 * 60 * 60 * 24))
             : 365;
         let frequencyScore = 100;
         if (daysSinceLastPurchase > 180)
@@ -57,7 +54,7 @@ class ClientIntelligenceService {
             frequencyScore = 60;
         else if (daysSinceLastPurchase > 30)
             frequencyScore = 80;
-        // Riesgo global (promedio ponderado)
+        // Riesgo global
         const overallRisk = (paymentScore * 0.4 + (100 - delayScore) * 0.4 + frequencyScore * 0.2);
         let riskLevel;
         if (overallRisk >= 80)
@@ -68,7 +65,7 @@ class ClientIntelligenceService {
             riskLevel = 'high';
         else
             riskLevel = 'critical';
-        // Generar recomendaciones
+        // Recomendaciones
         const recommendations = [];
         if (pendingSales.length > 0) {
             recommendations.push(`${pendingSales.length} facture(s) en attente de paiement`);
@@ -81,9 +78,9 @@ class ClientIntelligenceService {
         }
         return {
             clientId: client.id,
-            clientName: `${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Sans nom',
-            clientPhone: client.phone,
-            clientEmail: client.email,
+            clientName: `${client.first_name || ''} ${client.last_name || ''}`.trim() || 'Sans nom',
+            clientPhone: client.phone || undefined,
+            clientEmail: client.email || undefined,
             totalPurchases,
             totalSpent,
             averageTicket,
@@ -92,16 +89,16 @@ class ClientIntelligenceService {
             frequencyScore: Math.round(frequencyScore),
             overallRisk: Math.round(overallRisk),
             riskLevel,
-            recommendations
+            recommendations,
         };
     }
     // Calcular scores para todos los clientes
     async calculateAllRiskScores() {
-        const clients = await this.clientRepo.find();
-        const scores = await Promise.all(clients.map(c => this.calculateRiskScore(c.id).catch(() => null)));
-        return scores.filter(s => s !== null);
+        const clients = await server_1.prisma.clients.findMany();
+        const scores = await Promise.all(clients.map((c) => this.calculateRiskScore(c.id).catch(() => null)));
+        return scores.filter((s) => s !== null);
     }
-    // Segmentación automática de clientes
+    // Segmentación automática
     async getClientSegments() {
         const scores = await this.calculateAllRiskScores();
         const segments = [
@@ -112,7 +109,7 @@ class ClientIntelligenceService {
                 criteria: 'totalSpent > 5000 AND frequencyScore > 80',
                 clientCount: 0,
                 averageSpent: 0,
-                color: 'purple'
+                color: 'purple',
             },
             {
                 id: 'regular',
@@ -121,7 +118,7 @@ class ClientIntelligenceService {
                 criteria: 'totalSpent BETWEEN 1000 AND 5000 AND frequencyScore > 60',
                 clientCount: 0,
                 averageSpent: 0,
-                color: 'blue'
+                color: 'blue',
             },
             {
                 id: 'occasional',
@@ -130,7 +127,7 @@ class ClientIntelligenceService {
                 criteria: 'totalSpent BETWEEN 100 AND 1000 OR frequencyScore BETWEEN 30 AND 60',
                 clientCount: 0,
                 averageSpent: 0,
-                color: 'green'
+                color: 'green',
             },
             {
                 id: 'at-risk',
@@ -139,7 +136,7 @@ class ClientIntelligenceService {
                 criteria: 'frequencyScore < 30 OR daysSinceLastPurchase > 90',
                 clientCount: 0,
                 averageSpent: 0,
-                color: 'orange'
+                color: 'orange',
             },
             {
                 id: 'critical',
@@ -148,11 +145,10 @@ class ClientIntelligenceService {
                 criteria: 'delayScore > 50 OR overallRisk < 40',
                 clientCount: 0,
                 averageSpent: 0,
-                color: 'red'
-            }
+                color: 'red',
+            },
         ];
-        // Calcular métricas por segmento
-        scores.forEach(score => {
+        scores.forEach((score) => {
             if (score.totalSpent > 5000 && score.frequencyScore > 80) {
                 segments[0].clientCount++;
                 segments[0].averageSpent += score.totalSpent;
@@ -174,30 +170,36 @@ class ClientIntelligenceService {
                 segments[4].averageSpent += score.totalSpent;
             }
         });
-        // Calcular promedios
-        segments.forEach(s => {
+        segments.forEach((s) => {
             s.averageSpent = s.clientCount > 0 ? Math.round(s.averageSpent / s.clientCount) : 0;
         });
         return segments;
     }
-    // Analizar comportamiento de compra de un cliente
+    // Analizar comportamiento de compra
     async getPurchaseBehavior(clientId) {
-        const client = await this.clientRepo.findOne({ where: { id: clientId } });
+        const client = await server_1.prisma.clients.findUnique({
+            where: { id: clientId },
+        });
         if (!client)
             return null;
-        const sales = await this.saleRepo.find({
-            where: { clientId: client.id },
-            relations: ['items', 'items.product'],
-            order: { createdAt: 'ASC' }
+        const sales = await server_1.prisma.sales.findMany({
+            where: { client_id: clientId },
+            include: {
+                sale_items: {
+                    include: {
+                        product: true,
+                    },
+                },
+            },
+            orderBy: { created_at: 'asc' },
         });
         if (sales.length === 0)
             return null;
-        // Analizar categorías favoritas
         const categoryCount = {};
         const labCount = {};
         let totalItems = 0;
-        sales.forEach(sale => {
-            sale.items?.forEach(item => {
+        sales.forEach((sale) => {
+            sale.sale_items?.forEach((item) => {
                 if (item.product?.category) {
                     categoryCount[item.product.category] = (categoryCount[item.product.category] || 0) + 1;
                 }
@@ -207,9 +209,10 @@ class ClientIntelligenceService {
                 totalItems++;
             });
         });
-        // Calcular frecuencias
-        const firstPurchase = new Date(sales[0].createdAt);
-        const lastPurchase = new Date(sales[sales.length - 1].createdAt);
+        const firstPurchase = sales[0]?.created_at ? new Date(sales[0].created_at) : new Date();
+        const lastPurchase = sales.length > 0 && sales[sales.length - 1]?.created_at
+            ? new Date(sales[sales.length - 1].created_at)
+            : new Date();
         const daysDiff = Math.floor((lastPurchase.getTime() - firstPurchase.getTime()) / (1000 * 60 * 60 * 24));
         const avgDaysBetween = sales.length > 1 ? daysDiff / (sales.length - 1) : 0;
         let frequency;
@@ -223,24 +226,22 @@ class ClientIntelligenceService {
             frequency = 'quarterly';
         else
             frequency = 'rare';
-        // Método de pago preferido
         const paymentMethods = {};
-        sales.forEach(s => {
-            paymentMethods[s.paymentMethod] = (paymentMethods[s.paymentMethod] || 0) + 1;
+        sales.forEach((s) => {
+            paymentMethods[s.payment_method] = (paymentMethods[s.payment_method] || 0) + 1;
         });
         const preferredMethod = Object.entries(paymentMethods)
             .sort((a, b) => b[1] - a[1])[0]?.[0] || 'unknown';
-        // Hora preferida
-        const hours = sales.map(s => new Date(s.createdAt).getHours());
+        const hours = sales.map((s) => new Date(s.created_at).getHours());
         const preferredHour = hours.sort((a, b) => hours.filter(h => h === a).length - hours.filter(h => h === b).length).pop() || 12;
         return {
             clientId: client.id,
-            clientName: `${client.firstName || ''} ${client.lastName || ''}`.trim() || 'Sans nom',
+            clientName: `${client.first_name || ''} ${client.last_name || ''}`.trim() || 'Sans nom',
             favoriteCategories: Object.entries(categoryCount)
                 .map(([category, count]) => ({
                 category,
                 count,
-                percentage: Math.round((count / totalItems) * 100)
+                percentage: Math.round((count / totalItems) * 100),
             }))
                 .sort((a, b) => b.count - a.count)
                 .slice(0, 5),
@@ -248,7 +249,7 @@ class ClientIntelligenceService {
                 .map(([laboratory, count]) => ({
                 laboratory,
                 count,
-                percentage: Math.round((count / totalItems) * 100)
+                percentage: Math.round((count / totalItems) * 100),
             }))
                 .sort((a, b) => b.count - a.count)
                 .slice(0, 5),
@@ -257,26 +258,26 @@ class ClientIntelligenceService {
             lastPurchaseDate: lastPurchase,
             firstPurchaseDate: firstPurchase,
             preferredPaymentMethod: preferredMethod,
-            preferredHour
+            preferredHour,
         };
     }
-    // Obtener resumen de inteligencia de clientes
+    // Obtener resumen de inteligencia
     async getClientIntelligence() {
         const [scores, segments] = await Promise.all([
             this.calculateAllRiskScores(),
-            this.getClientSegments()
+            this.getClientSegments(),
         ]);
         const totalClients = scores.length;
         const totalRevenue = scores.reduce((sum, s) => sum + s.totalSpent, 0);
         const averagePerClient = totalClients > 0 ? totalRevenue / totalClients : 0;
-        const atRiskCount = scores.filter(s => s.riskLevel === 'high' || s.riskLevel === 'critical').length;
+        const atRiskCount = scores.filter((s) => s.riskLevel === 'high' || s.riskLevel === 'critical').length;
         return {
             totalClients,
             totalRevenue,
             averagePerClient,
             atRiskCount,
             atRiskPercentage: totalClients > 0 ? Math.round((atRiskCount / totalClients) * 100) : 0,
-            segments
+            segments,
         };
     }
 }

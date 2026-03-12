@@ -1,85 +1,130 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.aiMessageGeneratorService = exports.AIMessageGeneratorService = void 0;
-const data_source_1 = require("../data-source");
-const Product_1 = require("../entities/Product");
-const AIGeneratedMessage_1 = require("../entities/AIGeneratedMessage");
+const server_1 = require("../server");
 class AIMessageGeneratorService {
-    constructor() {
-        this.messageRepo = data_source_1.AppDataSource.getRepository(AIGeneratedMessage_1.AIGeneratedMessage);
-    }
-    // Simular IA (en producción usarías OpenAI o similar)
-    async generateMessages(productId, pointsCost, userId) {
-        const product = await data_source_1.AppDataSource.getRepository(Product_1.Product)
-            .findOne({ where: { id: productId } });
-        if (!product)
-            throw new Error('Product not found');
-        const messages = [];
-        // Mensaje profesional
-        messages.push({
-            tone: 'professional',
-            message: this.generateProfessionalMessage(product, pointsCost)
+    async generateMessage(productId, options = {}) {
+        const product = await server_1.prisma.products.findUnique({
+            where: { id: productId },
         });
-        // Mensaje cercano/amigable
-        messages.push({
-            tone: 'friendly',
-            message: this.generateFriendlyMessage(product, pointsCost)
-        });
-        // Mensaje de urgencia
-        if (product.expirationDate) {
-            const daysToExpiry = Math.ceil((product.expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-            messages.push({
-                tone: 'urgent',
-                message: this.generateUrgentMessage(product, daysToExpiry, pointsCost)
-            });
+        if (!product) {
+            throw new Error('Producto no encontrado');
         }
-        // Guardar mensajes generados
-        for (const msg of messages) {
-            const aiMessage = this.messageRepo.create({
-                tone: msg.tone,
-                message: msg.message,
-                productId,
-                pointsCost,
-                createdById: userId || 1
-            });
-            await this.messageRepo.save(aiMessage);
+        const tone = options.tone || 'profesional';
+        const includeProductInfo = options.includeProductInfo ?? true;
+        let message = '';
+        switch (tone) {
+            case 'profesional':
+                message = this.generateProfessionalMessage(product);
+                break;
+            case 'amigable':
+                message = this.generateFriendlyMessage(product);
+                break;
+            case 'entusiasta':
+                message = this.generateEnthusiasticMessage(product);
+                break;
+            case 'urgente':
+                message = this.generateUrgentMessage(product);
+                break;
+        }
+        if (includeProductInfo) {
+            message += `\n\n${product.name} - ${product.pricePPV} MAD`;
+        }
+        // Guardar mensaje generado
+        await this.saveGeneratedMessage(productId, message, tone);
+        return message;
+    }
+    async generateBulkMessages(productIds, options = {}) {
+        const messages = [];
+        for (const productId of productIds) {
+            try {
+                const message = await this.generateMessage(productId, options);
+                messages.push({ productId, message });
+            }
+            catch (error) {
+                console.error(`Error generando mensaje para producto ${productId}:`, error);
+            }
         }
         return messages;
     }
-    generateProfessionalMessage(product, pointsCost) {
-        const pointsText = pointsCost ?
-            ` par ${pointsCost} points` :
-            ' à un prix spécial';
-        return `Bonjour {{nombre_cliente}}, nous avons le plaisir de vous informer que ${product.name} est disponible${pointsText}. Profitez-en dès maintenant dans votre pharmacie CleverHub.`;
+    personalizeMessage(template, client, variables) {
+        let personalized = template;
+        // Variables predefinidas
+        personalized = personalized.replace(/{{nombre}}/g, client.firstName || 'cliente');
+        personalized = personalized.replace(/{{apellido}}/g, client.lastName || '');
+        personalized = personalized.replace(/{{nombre_completo}}/g, client.name || 'cliente');
+        if (client.loyaltyPoints) {
+            personalized = personalized.replace(/{{puntos}}/g, client.loyaltyPoints.toString());
+        }
+        if (client.totalSpent) {
+            personalized = personalized.replace(/{{gasto_total}}/g, client.totalSpent.toString());
+        }
+        // Variables personalizadas
+        Object.entries(variables).forEach(([key, value]) => {
+            personalized = personalized.replace(new RegExp(`{{${key}}}`, 'g'), value);
+        });
+        return personalized;
     }
-    generateFriendlyMessage(product, pointsCost) {
-        const pointsText = pointsCost ?
-            ` à seulement ${pointsCost} points` :
-            ' en promotion';
-        return `Salut {{nombre_cliente}} 👋, on a pensé à toi ! ${product.name} est disponible${pointsText}. Viens vite le découvrir ! 🎁`;
-    }
-    generateUrgentMessage(product, daysToExpiry, pointsCost) {
-        const pointsText = pointsCost ?
-            ` à ${pointsCost} points` :
-            '';
-        return `⚠️ URGENT - DERNIÈRE CHANCE ⚠️\n\n{{nombre_cliente}}, il ne reste que ${daysToExpiry} jours avant l'expiration de ${product.name}${pointsText}. Ne ratez pas cette occasion unique !`;
-    }
-    // Obtener mensajes generados anteriormente
-    async getRecentMessages(productId, limit = 5) {
-        return this.messageRepo.find({
-            where: { productId },
-            order: { createdAt: 'DESC' },
-            take: limit,
-            relations: ['createdBy']
+    async saveGeneratedMessage(productId, message, tone, userId) {
+        await server_1.prisma.ai_generated_messages.create({
+            data: {
+                product_id: productId,
+                message,
+                tone,
+                created_by: userId,
+            },
         });
     }
-    // Registrar uso de mensaje
-    async recordUsage(messageId) {
-        await this.messageRepo.increment({ id: messageId }, 'usageCount', 1);
-    }
-    // Registrar like en mensaje
     async likeMessage(messageId) {
-        await this.messageRepo.increment({ id: messageId }, 'likeCount', 1);
+        await server_1.prisma.ai_generated_messages.update({
+            where: { id: messageId },
+            data: {
+                like_count: {
+                    increment: 1,
+                },
+            },
+        });
+    }
+    async getPopularMessages(limit = 10) {
+        const messages = await server_1.prisma.ai_generated_messages.findMany({
+            where: {
+                like_count: {
+                    gt: 0,
+                },
+            },
+            include: {
+                product: true,
+            },
+            orderBy: {
+                like_count: 'desc',
+            },
+            take: limit,
+        });
+        return messages.map((m) => ({
+            id: m.id,
+            message: m.message,
+            tone: m.tone,
+            likes: m.like_count,
+            usageCount: m.usage_count,
+            productName: m.product?.name,
+            createdAt: m.created_at,
+        }));
+    }
+    generateProfessionalMessage(product) {
+        return `Le informamos que tenemos disponible ${product.name} en nuestra farmacia. 
+Precio: ${product.pricePPV} MAD. Para más información, no dude en contactarnos.`;
+    }
+    generateFriendlyMessage(product) {
+        return `¡Hola! 😊 Queremos contarte que ya tenemos ${product.name} disponible. 
+Pásate por la farmacia cuando puedas. ¡Te esperamos! ✨`;
+    }
+    generateEnthusiasticMessage(product) {
+        return `🎉 ¡GRAN NOTICIA! 🎉\n\nYa llegó ${product.name} a nuestra farmacia. 
+No te quedes sin el tuyo. ¡Corre que vuelan! 🏃‍♂️💨`;
+    }
+    generateUrgentMessage(product) {
+        return `⚠️ ÚLTIMAS UNIDADES ⚠️\n\n${product.name} - ¡Stock limitado! 
+Aprovecha antes de que se agote. 🏃‍♀️`;
     }
 }
 exports.AIMessageGeneratorService = AIMessageGeneratorService;

@@ -1,52 +1,56 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.reportService = exports.ReportService = void 0;
-const data_source_1 = require("../../data-source");
-const Sale_1 = require("../../entities/Sale");
-const Payment_1 = require("../../entities/Payment");
-const typeorm_1 = require("typeorm");
-const User_1 = require("../../entities/User");
-const SaleItem_1 = require("../../entities/SaleItem");
-const Product_1 = require("../../entities/Product");
+const server_1 = require("../../server");
 class ReportService {
     async getCashClosure(date, userId) {
         const startOfDay = new Date(date);
         startOfDay.setHours(0, 0, 0, 0);
         const endOfDay = new Date(date);
         endOfDay.setHours(23, 59, 59, 999);
-        const saleRepo = data_source_1.AppDataSource.getRepository(Sale_1.Sale);
-        const paymentRepo = data_source_1.AppDataSource.getRepository(Payment_1.Payment);
-        const userRepo = data_source_1.AppDataSource.getRepository(User_1.User);
-        const saleItemRepo = data_source_1.AppDataSource.getRepository(SaleItem_1.SaleItem);
-        // Obtener ventas del día
-        const sales = await saleRepo.find({
+        // Obtener ventas del día con Prisma
+        const sales = await server_1.prisma.sales.findMany({
             where: {
-                createdAt: (0, typeorm_1.Between)(startOfDay, endOfDay),
-                saleStatus: 'completed'
+                created_at: {
+                    gte: startOfDay,
+                    lte: endOfDay,
+                },
+                sale_status: 'completed',
             },
-            relations: ['items', 'items.product']
+            include: {
+                sale_items: {
+                    include: {
+                        product: true,
+                    },
+                },
+                client: true,
+                user: true,
+            },
         });
         // Obtener pagos del día
-        const payments = await paymentRepo.find({
+        const payments = await server_1.prisma.payments.findMany({
             where: {
-                createdAt: (0, typeorm_1.Between)(startOfDay, endOfDay)
-            }
+                created_at: {
+                    gte: startOfDay,
+                    lte: endOfDay,
+                },
+            },
         });
         // Calcular ventas brutas y netas
         const grossSales = sales.reduce((sum, s) => sum + Number(s.total), 0);
-        const discountTotal = sales.reduce((sum, s) => sum + Number(s.discountAmount || 0), 0);
+        const discountTotal = sales.reduce((sum, s) => sum + Number(s.discount_amount || 0), 0);
         // Calcular margen bruto
         let totalCost = 0;
         let totalRevenue = 0;
-        sales.forEach(sale => {
-            sale.items?.forEach(item => {
+        sales.forEach((sale) => {
+            sale.sale_items?.forEach((item) => {
                 totalRevenue += Number(item.total);
-                totalCost += Number(item.quantity) * Number(item.unitPricePPH || 0);
+                totalCost += Number(item.quantity) * Number(item.unit_price_pph || 0);
             });
         });
         const grossMargin = totalRevenue - totalCost;
         const marginPercentage = totalRevenue > 0 ? (grossMargin / totalRevenue) * 100 : 0;
-        // Desglose de IVA (simplificado - asumiendo 20% general)
+        // Desglose de IVA (simplificado)
         const vatBreakdown = {
             vat7: 0,
             vat10: 0,
@@ -61,43 +65,43 @@ class ReportService {
         let totalTransfer = 0;
         let totalCheck = 0;
         let totalCredit = 0;
-        // 1. Procesar pagos de la tabla payments
-        payments.forEach(payment => {
+        // Procesar pagos
+        payments.forEach((payment) => {
             const amount = Number(payment.amount);
-            switch (payment.paymentMethod?.toLowerCase()) {
+            switch (payment.payment_method?.toLowerCase()) {
                 case 'cash':
                 case 'espèces':
+                case 'efectivo':
                     totalCash += amount;
                     break;
                 case 'card':
                 case 'carte bancaire':
+                case 'tarjeta':
                 case 'credit card':
                     totalCard += amount;
                     break;
                 case 'transfer':
                 case 'virement':
+                case 'transferencia':
                 case 'bank transfer':
                     totalTransfer += amount;
                     break;
                 case 'check':
                 case 'chèque':
+                case 'cheque':
                 case 'bank cheque':
                     totalCheck += amount;
                     break;
             }
         });
-        // 2. Procesar ventas (para créditos y partes de ventas mixtas)
-        sales.forEach(sale => {
+        // Procesar ventas para créditos
+        sales.forEach((sale) => {
             const saleTotal = Number(sale.total);
-            const method = sale.paymentMethod?.toLowerCase() || '';
-            if (method === 'credit') {
-                // Venta puramente a crédito
+            const method = sale.payment_method?.toLowerCase() || '';
+            if (method === 'credit' || method === 'credito') {
                 totalCredit += saleTotal;
             }
-            else if (method === 'mixed' || method === 'mixte') {
-                // Venta mixta - necesitamos saber la distribución
-                // Por ahora, asumimos distribución 50/50 entre efectivo y crédito
-                // Idealmente, deberías tener una tabla intermedia que guarde la distribución
+            else if (method === 'mixed' || method === 'mixto') {
                 totalCash += saleTotal * 0.5;
                 totalCredit += saleTotal * 0.5;
             }
@@ -109,12 +113,15 @@ class ReportService {
             check: totalCheck,
             credit: totalCredit,
         };
-        const user = await userRepo.findOne({ where: { id: userId } });
+        // Obtener usuario
+        const user = await server_1.prisma.users.findUnique({
+            where: { id: userId },
+        });
         // Calcular productos más vendidos
         const productSales = new Map();
-        sales.forEach(sale => {
-            sale.items?.forEach(item => {
-                const productId = item.productId;
+        sales.forEach((sale) => {
+            sale.sale_items?.forEach((item) => {
+                const productId = item.product_id;
                 if (!productSales.has(productId)) {
                     productSales.set(productId, {
                         productId,
@@ -136,7 +143,7 @@ class ReportService {
         return {
             id: `closure-${date}`,
             date,
-            user: user ? { id: user.id, fullName: user.fullName || 'Admin' } : { id: userId, fullName: 'Admin' },
+            user: user ? { id: user.id, fullName: user.full_name || 'Admin' } : { id: userId, fullName: 'Admin' },
             fiscalData: {
                 companyName: 'Pharmacie CleverHub',
                 if: 'IF123456',
@@ -179,7 +186,6 @@ class ReportService {
         return { success: true };
     }
     async getDashboardKPIs(period) {
-        // Calcular fechas según período
         const endDate = new Date();
         const startDate = new Date();
         switch (period) {
@@ -195,53 +201,61 @@ class ReportService {
             default:
                 startDate.setDate(startDate.getDate() - 7);
         }
-        const saleRepo = data_source_1.AppDataSource.getRepository(Sale_1.Sale);
-        const productRepo = data_source_1.AppDataSource.getRepository(Product_1.Product);
         // Ventas del período
-        const sales = await saleRepo.find({
+        const sales = await server_1.prisma.sales.findMany({
             where: {
-                createdAt: (0, typeorm_1.Between)(startDate, endDate),
-                saleStatus: 'completed'
-            }
+                created_at: {
+                    gte: startDate,
+                    lte: endDate,
+                },
+                sale_status: 'completed',
+            },
         });
         const totalSales = sales.reduce((sum, s) => sum + Number(s.total), 0);
-        // Ventas del período anterior (para calcular crecimiento)
-        const previousStartDate = new Date(startDate);
-        previousStartDate.setDate(previousStartDate.getDate() - (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-        const previousSales = await saleRepo.find({
+        // Ventas del período anterior
+        const periodLength = endDate.getTime() - startDate.getTime();
+        const previousStartDate = new Date(startDate.getTime() - periodLength);
+        const previousSales = await server_1.prisma.sales.findMany({
             where: {
-                createdAt: (0, typeorm_1.Between)(previousStartDate, startDate),
-                saleStatus: 'completed'
-            }
+                created_at: {
+                    gte: previousStartDate,
+                    lte: startDate,
+                },
+                sale_status: 'completed',
+            },
         });
         const previousTotal = previousSales.reduce((sum, s) => sum + Number(s.total), 0);
         const salesGrowth = previousTotal > 0 ? ((totalSales - previousTotal) / previousTotal) * 100 : 0;
-        // Valor total del stock (PPH)
-        const products = await productRepo.find();
+        // Valor total del stock
+        const products = await server_1.prisma.products.findMany();
         const totalStockValue = products.reduce((sum, p) => sum + Number(p.pricePPH) * p.stock, 0);
         // Margen promedio
-        const saleItemRepo = data_source_1.AppDataSource.getRepository(SaleItem_1.SaleItem);
-        const items = await saleItemRepo
-            .createQueryBuilder('item')
-            .leftJoin('item.sale', 'sale')
-            .where('sale.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
-            .getMany();
+        const items = await server_1.prisma.sale_items.findMany({
+            where: {
+                sale: {
+                    created_at: {
+                        gte: startDate,
+                        lte: endDate,
+                    },
+                },
+            },
+        });
         const totalMargin = items.reduce((sum, i) => sum + Number(i.margin || 0), 0);
         const averageMargin = totalSales > 0 ? (totalMargin / totalSales) * 100 : 0;
         // Productos próximos a caducar
         const threeMonthsFromNow = new Date();
         threeMonthsFromNow.setMonth(threeMonthsFromNow.getMonth() + 3);
-        const expiringProducts = products.filter(p => {
+        const expiringProducts = products.filter((p) => {
             if (!p.expirationDate)
                 return false;
             return new Date(p.expirationDate) <= threeMonthsFromNow;
         });
         const expiringPercentage = products.length > 0 ? (expiringProducts.length / products.length) * 100 : 0;
-        // Stock bajo (< 10)
-        const lowStockCount = products.filter(p => p.stock < 10).length;
+        // Stock bajo
+        const lowStockCount = products.filter((p) => p.stock < 10).length;
         // Pedidos pendientes
-        const pendingOrders = await saleRepo.count({
-            where: { paymentStatus: 'pending' }
+        const pendingOrders = await server_1.prisma.sales.count({
+            where: { payment_status: 'pending' }
         });
         return {
             totalStockValue,
@@ -269,38 +283,40 @@ class ReportService {
             default:
                 startDate.setDate(startDate.getDate() - 7);
         }
-        const saleRepo = data_source_1.AppDataSource.getRepository(Sale_1.Sale);
-        // Ventas del período actual agrupadas por día
-        const sales = await saleRepo
-            .createQueryBuilder('sale')
-            .select('DATE(sale.createdAt)', 'date')
-            .addSelect('SUM(sale.total)', 'total')
-            .where('sale.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
-            .andWhere('sale.saleStatus = :status', { status: 'completed' })
-            .groupBy('DATE(sale.createdAt)')
-            .orderBy('date', 'ASC')
-            .getRawMany();
-        // Período anterior para comparación
+        // Ventas agrupadas por día
+        const sales = await server_1.prisma.$queryRaw `
+      SELECT DATE(created_at) as date, SUM(total) as total
+      FROM sales
+      WHERE created_at BETWEEN ${startDate} AND ${endDate}
+      AND sale_status = 'completed'
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `;
+        // Período anterior
         const periodLength = endDate.getTime() - startDate.getTime();
         const previousStartDate = new Date(startDate.getTime() - periodLength);
-        const previousSales = await saleRepo
-            .createQueryBuilder('sale')
-            .select('DATE(sale.createdAt)', 'date')
-            .addSelect('SUM(sale.total)', 'total')
-            .where('sale.createdAt BETWEEN :start AND :end', { start: previousStartDate, end: startDate })
-            .andWhere('sale.saleStatus = :status', { status: 'completed' })
-            .groupBy('DATE(sale.createdAt)')
-            .orderBy('date', 'ASC')
-            .getRawMany();
-        // Combinar datos
+        const previousSales = await server_1.prisma.$queryRaw `
+      SELECT DATE(created_at) as date, SUM(total) as total
+      FROM sales
+      WHERE created_at BETWEEN ${previousStartDate} AND ${startDate}
+      AND sale_status = 'completed'
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `;
         const trend = [];
         const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
         for (let i = 0; i < days; i++) {
             const currentDate = new Date(startDate);
             currentDate.setDate(currentDate.getDate() + i);
             const dateStr = currentDate.toISOString().split('T')[0];
-            const currentSale = sales.find(s => s.date === dateStr);
-            const previousSale = previousSales.find(s => s.date === dateStr);
+            const currentSale = sales.find((s) => {
+                const saleDate = s.date instanceof Date ? s.date.toISOString().split('T')[0] : s.date;
+                return saleDate === dateStr;
+            });
+            const previousSale = previousSales.find((s) => {
+                const saleDate = s.date instanceof Date ? s.date.toISOString().split('T')[0] : s.date;
+                return saleDate === dateStr;
+            });
             trend.push({
                 date: dateStr,
                 actual: currentSale ? Number(currentSale.total) : 0,
@@ -325,38 +341,59 @@ class ReportService {
             default:
                 startDate.setDate(startDate.getDate() - 7);
         }
-        const saleItemRepo = data_source_1.AppDataSource.getRepository(SaleItem_1.SaleItem);
-        const products = await saleItemRepo
-            .createQueryBuilder('item')
-            .leftJoin('item.product', 'product')
-            .leftJoin('item.sale', 'sale')
-            .select('product.id', 'id')
-            .addSelect('product.name', 'name')
-            .addSelect('product.category', 'category')
-            .addSelect('SUM(item.quantity)', 'quantity')
-            .addSelect('SUM(item.total)', 'revenue')
-            .addSelect('SUM(item.margin)', 'margin')
-            .where('sale.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate })
-            .andWhere('sale.saleStatus = :status', { status: 'completed' })
-            .groupBy('product.id')
-            .addGroupBy('product.name')
-            .addGroupBy('product.category')
-            .orderBy('SUM(item.quantity)', 'DESC')
-            .limit(limit)
-            .getRawMany();
-        return products.map(p => ({
-            id: p.id,
-            name: p.name,
-            category: p.category,
-            quantity: Number(p.quantity),
-            revenue: Number(p.revenue),
-            margin: Number(p.margin || 0),
-            marginPercentage: Number(p.revenue) > 0 ? (Number(p.margin || 0) / Number(p.revenue)) * 100 : 0
-        }));
+        const products = await server_1.prisma.sale_items.groupBy({
+            by: ['product_id'],
+            where: {
+                sale: {
+                    created_at: {
+                        gte: startDate,
+                        lte: endDate,
+                    },
+                    sale_status: 'completed',
+                },
+            },
+            _sum: {
+                quantity: true,
+                total: true,
+                margin: true,
+            },
+            orderBy: {
+                _sum: {
+                    quantity: 'desc',
+                },
+            },
+            take: limit,
+        });
+        const productIds = products.map(p => p.product_id);
+        const productDetails = await server_1.prisma.products.findMany({
+            where: {
+                id: {
+                    in: productIds,
+                },
+            },
+            select: {
+                id: true,
+                name: true,
+                category: true,
+            },
+        });
+        const productMap = new Map(productDetails.map(p => [p.id, p]));
+        return products.map(p => {
+            const details = productMap.get(p.product_id);
+            return {
+                id: p.product_id,
+                name: details?.name || 'Unknown',
+                category: details?.category || 'Unknown',
+                quantity: Number(p._sum?.quantity || 0),
+                revenue: Number(p._sum?.total || 0),
+                margin: Number(p._sum?.margin || 0),
+                marginPercentage: Number(p._sum?.total || 0) > 0
+                    ? (Number(p._sum?.margin || 0) / Number(p._sum?.total || 0)) * 100
+                    : 0,
+            };
+        });
     }
     async getLostSales(period) {
-        // Simulación de ventas perdidas (en un sistema real, esto vendría de una tabla de eventos)
-        // Por ahora devolvemos un array vacío
         return [];
     }
 }

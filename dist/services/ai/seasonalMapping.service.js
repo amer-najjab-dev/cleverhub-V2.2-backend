@@ -12,7 +12,7 @@ exports.SEASONAL_MAPPING = [
             { month: 0, factor: 1.6 }, // Enero
             { month: 1, factor: 1.4 }, // Febrero
         ],
-        description: 'Pic hivernal des infections respiratoires'
+        description: 'Pic hivernal des infections respiratoires',
     },
     {
         category: 'Anti-inflammatoire non stéroïdien',
@@ -22,9 +22,8 @@ exports.SEASONAL_MAPPING = [
             { month: 0, factor: 1.4 },
             { month: 1, factor: 1.3 },
         ],
-        description: 'Douleurs et fièvre associées aux grippes'
+        description: 'Douleurs et fièvre associées aux grippes',
     },
-    // DERMO-COSMÉTIQUE / SOLAIRES (Verano)
     {
         category: 'Dermocosmétique',
         indexes: [
@@ -33,48 +32,46 @@ exports.SEASONAL_MAPPING = [
             { month: 7, factor: 2.0 }, // Agosto
             { month: 8, factor: 1.3 }, // Septiembre
         ],
-        description: 'Pics estival pour les solaires et soins'
+        description: 'Pics estival pour les solaires et soins',
     },
     {
         category: 'Antihistaminique H1',
         indexes: [
-            { month: 3, factor: 1.3 }, // Abril (alergias primavera)
+            { month: 3, factor: 1.3 }, // Abril
             { month: 4, factor: 1.4 }, // Mayo
             { month: 5, factor: 1.3 }, // Junio
             { month: 8, factor: 1.2 }, // Septiembre
         ],
-        description: 'Allergies saisonnières (printemps/automne)'
+        description: 'Allergies saisonnières (printemps/automne)',
     },
-    // DIGESTIF (Verano y fin de año)
     {
         category: 'Antiulcéreux',
         indexes: [
             { month: 6, factor: 1.2 }, // Julio
             { month: 7, factor: 1.3 }, // Agosto
-            { month: 11, factor: 1.4 }, // Diciembre (excesos)
+            { month: 11, factor: 1.4 }, // Diciembre
             { month: 0, factor: 1.3 }, // Enero
         ],
-        description: 'Troubles digestifs (été + fêtes)'
+        description: 'Troubles digestifs (été + fêtes)',
     },
-    // CARDIO-VASCULAR (Estable todo el año)
     {
         category: 'Hypolipémiant',
         indexes: [
             { month: 0, factor: 1.1 },
             { month: 1, factor: 1.1 },
         ],
-        description: 'Traitements chroniques stables'
+        description: 'Traitements chroniques stables',
     },
     {
         category: 'Antihypertenseur',
         indexes: [],
-        description: 'Traitements chroniques stables'
+        description: 'Traitements chroniques stables',
     },
     {
         category: 'Antidiabétique',
         indexes: [],
-        description: 'Traitements chroniques stables'
-    }
+        description: 'Traitements chroniques stables',
+    },
 ];
 class SeasonalMappingService {
     getSeasonalFactor(category, month) {
@@ -98,7 +95,7 @@ class SeasonalMappingService {
         return {
             currentMonth: factorCurrent,
             nextMonth: factorNext,
-            nextQuarter: nextQuarterFactor
+            nextQuarter: nextQuarterFactor,
         };
     }
     getHighRiskCategories() {
