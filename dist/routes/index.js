@@ -20,6 +20,7 @@ const loyaltyReward_routes_1 = __importDefault(require("./loyaltyReward.routes")
 const loyaltyCheckout_routes_1 = __importDefault(require("./loyaltyCheckout.routes"));
 const loyaltyConfig_routes_1 = __importDefault(require("./loyaltyConfig.routes"));
 const campaign_routes_1 = __importDefault(require("./campaign.routes"));
+const client_routes_1 = __importDefault(require("./client.routes"));
 const router = (0, express_1.Router)();
 console.log('🔄 Cargando rutas principales...');
 // Rutas existentes
@@ -38,6 +39,7 @@ router.use('/loyalty', loyaltyReward_routes_1.default);
 router.use('/loyalty-checkout', loyaltyCheckout_routes_1.default);
 router.use('/loyalty-config', loyaltyConfig_routes_1.default);
 router.use('/campaigns', campaign_routes_1.default);
+router.use('/clients', client_routes_1.default);
 // Ruta de salud
 router.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });

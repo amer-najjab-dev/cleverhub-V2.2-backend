@@ -73,7 +73,6 @@ app.use((0, express_session_1.default)({
         secure: isProd, // true en producción (HTTPS)
         maxAge: 1000 * 60 * 60 * 8, // 8 horas
         sameSite: isProd ? 'none' : 'lax', // 'none' permite cross-site
-        domain: isProd ? '.render.com' : undefined,
         path: '/'
     },
 }));

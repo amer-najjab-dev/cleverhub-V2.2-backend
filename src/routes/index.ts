@@ -16,6 +16,7 @@ import loyaltyRewardRoutes from './loyaltyReward.routes';
 import loyaltyCheckoutRoutes from './loyaltyCheckout.routes';
 import loyaltyConfigRoutes from './loyaltyConfig.routes';
 import campaignRoutes from './campaign.routes';
+import clientRoutes from './client.routes';
 
 const router = Router();
 
@@ -38,6 +39,7 @@ router.use('/loyalty', loyaltyRewardRoutes);
 router.use('/loyalty-checkout', loyaltyCheckoutRoutes);
 router.use('/loyalty-config', loyaltyConfigRoutes);
 router.use('/campaigns', campaignRoutes);
+router.use('/clients', clientRoutes);
 
 // Ruta de salud
 router.get('/health', (req, res) => {
