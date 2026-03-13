@@ -39,7 +39,8 @@ export class VentaController {
           total: calculatedTotal,
           paid_amount: paidAmount || calculatedTotal,
           payment_method: paymentMethod || 'cash',
-          payment_status: 'paid',
+          payment_status: paidAmount && Number(paidAmount) >= calculatedTotal ? 'paid' : 
+                paidAmount && Number(paidAmount) > 0 ? 'partial' : 'pending',
           sale_status: 'completed',
           sale_items: {
             create: items.map((item: any) => {
