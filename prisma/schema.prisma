@@ -51,6 +51,7 @@ model clients {
   loyalty_transactions loyalty_transactions[]
   message_recipients   message_recipients[]
   sales                sales[]
+  health_records     health_records[]
 
   @@map("clients")
 }
@@ -231,6 +232,29 @@ model client_debt {
 
   @@index([client_id], map: "idx_client_debts_client_id")
   @@map("client_debts")
+}
+
+model health_records {
+  id                        Int       @id @default(autoincrement())
+  client_id                 Int       @map("client_id")
+  glucose_level             Decimal?  @map("glucose_level") @db.Decimal(5, 2)
+  blood_pressure_systolic   Int?      @map("blood_pressure_systolic")
+  blood_pressure_diastolic  Int?      @map("blood_pressure_diastolic")
+  weight                    Decimal?  @map("weight") @db.Decimal(5, 2)
+  heart_rate                Int?      @map("heart_rate")
+  record_date               DateTime  @map("record_date") @db.Date
+  notes                     String?   @map("notes")
+  glucose_status            String?   @map("glucose_status") @db.VarChar(20)
+  blood_pressure_status     String?   @map("blood_pressure_status") @db.VarChar(20)
+  heart_rate_status         String?   @map("heart_rate_status") @db.VarChar(20)
+  created_at                DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  updated_at                DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
+  
+  client                    clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@index([client_id], map: "idx_health_records_client")
+  @@index([record_date], map: "idx_health_records_date")
+  @@map("health_records")
 }
 
 model inventory_lots {
