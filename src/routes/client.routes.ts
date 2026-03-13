@@ -18,6 +18,7 @@ router.get('/:id/loyalty', (req, res) => clientController.getLoyaltyPoints(req, 
 
 // Rutas de deudas
 router.get('/:id/debts', (req, res) => clientController.getDebts(req, res));
+router.get('/:clientId/purchases', (req, res) => clientController.getClientPurchases(req, res));
 
 // ===== HEALTH RECORDS =====
 router.get('/:clientId/health-records', (req, res) => clientController.getHealthRecords(req, res));

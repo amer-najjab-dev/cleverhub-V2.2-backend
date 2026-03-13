@@ -235,6 +235,35 @@ export class ClientController {
     }
   }
 
+  async getClientPurchases(req: Request, res: Response) {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      
+      const purchases = await prisma.sales.findMany({
+        where: { client_id: clientId },
+        include: {
+          sale_items: {
+            include: {
+              product: true
+            }
+          }
+        },
+        orderBy: { created_at: 'desc' }
+      });
+
+      res.json({
+        success: true,
+        data: purchases
+      });
+    } catch (error: any) {
+      console.error('Error getting client purchases:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
+  }
+
   // ========== HEALTH RECORDS ==========
 
   async getHealthRecords(req: Request, res: Response) {
@@ -303,7 +332,7 @@ export class ClientController {
           blood_pressure_diastolic: bloodPressureDiastolic,
           weight,
           heart_rate: heartRate,
-          record_date: new Date(recordDate),
+          record_date: recordDate ? new Date(recordDate) : new Date(),
           notes,
           glucose_status: glucoseStatus,
           blood_pressure_status: bloodPressureStatus,
