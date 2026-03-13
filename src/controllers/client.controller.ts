@@ -92,8 +92,20 @@ export class ClientController {
 
   async create(req: Request, res: Response) {
     try {
+      const { firstName, lastName, phone, email, dni, ...rest } = req.body;
+      
+      // Mapear camelCase a snake_case
+      const clientData = {
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        email,
+        dni,
+        ...rest
+      };
+
       const client = await prisma.clients.create({
-        data: req.body,
+        data: clientData,
       });
 
       res.json({
@@ -112,10 +124,21 @@ export class ClientController {
   async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
+      const { firstName, lastName, phone, email, dni, ...rest } = req.body;
+      
+      // Mapear camelCase a snake_case
+      const clientData = {
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        email,
+        dni,
+        ...rest
+      };
       
       const client = await prisma.clients.update({
         where: { id: Number(id) },
-        data: req.body,
+        data: clientData,
       });
 
       res.json({
