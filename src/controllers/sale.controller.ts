@@ -37,6 +37,7 @@ export class VentaController {
       const calculatedTotal = calculatedSubtotal;
 
       // Procesar pagos
+      // Procesar pagos
       let totalPaid = 0;
       let hasCredit = false;
       let paymentsToCreate = [];
@@ -47,7 +48,10 @@ export class VentaController {
           const amount = Number(payment.amount) || 0;
           const method = payment.method || 'cash';
           
-          totalPaid += amount;
+          // Solo sumar a totalPaid si NO es crédito
+          if (method.toLowerCase() !== 'credit' && method.toLowerCase() !== 'credito') {
+            totalPaid += amount;
+          }
           
           if (method.toLowerCase() === 'credit' || method.toLowerCase() === 'credito') {
             hasCredit = true;
@@ -64,6 +68,17 @@ export class VentaController {
       } else {
         // Fallback: usar paidAmount del body
         totalPaid = Number(req.body.paidAmount) || 0;
+        
+        // Si hay paidAmount pero no payments, crear un pago implícito
+        if (totalPaid > 0) {
+          paymentsToCreate.push({
+            amount: totalPaid,
+            payment_method: paymentMethod || 'cash',
+            reference: null,
+            status: 'completed',
+            notes: null
+          });
+        }
       }
 
       // Determinar estado de pago
@@ -79,6 +94,10 @@ export class VentaController {
         paymentStatus = 'partial';
       }
 
+      // Calcular montos aplicados y pendientes
+      const amountApplied = totalPaid;
+      const amountPending = calculatedTotal - totalPaid;
+
       // Crear venta con Prisma
       const venta = await prisma.sales.create({
         data: {
@@ -88,8 +107,8 @@ export class VentaController {
           subtotal: calculatedSubtotal,
           total: calculatedTotal,
           paid_amount: totalPaid,
-          amount_applied: totalPaid,
-          amount_pending: calculatedTotal - totalPaid,
+          amount_applied: amountApplied,
+          amount_pending: amountPending,
           payment_method: paymentMethod || 'cash',
           payment_status: paymentStatus,
           sale_status: 'completed',
@@ -134,7 +153,8 @@ export class VentaController {
             }
           },
           client: true,
-          user: true
+          user: true,
+          payments: true // Incluir pagos en la respuesta
         }
       });
       
@@ -190,7 +210,8 @@ export class VentaController {
             include: {
               product: true
             }
-          }
+          },
+          payments: true // Incluir pagos en la lista
         },
         orderBy: {
           created_at: 'desc'
