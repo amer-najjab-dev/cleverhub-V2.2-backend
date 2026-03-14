@@ -6,27 +6,77 @@ export class VentaController {
   async crear(req: Request, res: Response) {
     console.log('Payload recibido:', JSON.stringify(req.body, null, 2));
     try {
-      const { userId, clientId, paymentMethod, items, subtotal, total, paidAmount } = req.body;
+      const { userId, clientId, paymentMethod, items, payments: paymentItems, notes } = req.body;
       
       if (!userId || !items || !items.length) {
         return res.status(400).json({ error: 'Faltan datos: userId, items' });
       }
 
-      // Calcular total si no viene, o usar el que viene
-      let calculatedSubtotal = subtotal || 0;
-      let calculatedTotal = total || 0;
-      
-      // Si no vienen calculados, calcularlos
-      if (!calculatedSubtotal) {
-        calculatedSubtotal = items.reduce((sum: number, item: any) => {
-          // Intentar con diferentes nombres de campo
-          const price = item.price || item.unit_price_ppv || item.unitPricePPV || 0;
-          return sum + (price * item.quantity);
-        }, 0);
+      // Calcular subtotal basado en los items
+      let calculatedSubtotal = 0;
+      const itemsWithPrices = [];
+
+      for (const item of items) {
+        // Obtener precios del item (pueden venir del frontend o de la BD)
+        const pricePPV = Number(item.unit_price_ppv || item.price || 0);
+        const pricePPH = Number(item.unit_price_pph || 0);
+        const itemTotal = pricePPV * item.quantity;
+        calculatedSubtotal += itemTotal;
+
+        itemsWithPrices.push({
+          product_id: item.productId,
+          quantity: item.quantity,
+          unit_price_ppv: pricePPV,
+          unit_price_pph: pricePPH,
+          subtotal: itemTotal,
+          total: itemTotal,
+          margin: (pricePPV - pricePPH) * item.quantity
+        });
       }
-      
-      if (!calculatedTotal) {
-        calculatedTotal = calculatedSubtotal; // Sin impuestos por ahora
+
+      const calculatedTotal = calculatedSubtotal;
+
+      // Procesar pagos
+      let totalPaid = 0;
+      let hasCredit = false;
+      let paymentsToCreate = [];
+
+      if (paymentItems && Array.isArray(paymentItems) && paymentItems.length > 0) {
+        // Usar el array de pagos del body
+        for (const payment of paymentItems) {
+          const amount = Number(payment.amount) || 0;
+          const method = payment.method || 'cash';
+          
+          totalPaid += amount;
+          
+          if (method.toLowerCase() === 'credit' || method.toLowerCase() === 'credito') {
+            hasCredit = true;
+          }
+
+          paymentsToCreate.push({
+            amount,
+            payment_method: method,
+            reference: payment.reference || null,
+            status: 'completed',
+            notes: payment.notes || null
+          });
+        }
+      } else {
+        // Fallback: usar paidAmount del body
+        totalPaid = Number(req.body.paidAmount) || 0;
+      }
+
+      // Determinar estado de pago
+      let paymentStatus = 'pending';
+      if (totalPaid >= calculatedTotal) {
+        paymentStatus = 'paid';
+      } else if (totalPaid > 0) {
+        paymentStatus = 'partial';
+      }
+
+      // Si hay crédito y no se pagó el total, es parcial
+      if (hasCredit && totalPaid < calculatedTotal) {
+        paymentStatus = 'partial';
       }
 
       // Crear venta con Prisma
@@ -37,33 +87,25 @@ export class VentaController {
           client_id: clientId,
           subtotal: calculatedSubtotal,
           total: calculatedTotal,
-          paid_amount: paidAmount || calculatedTotal,
+          paid_amount: totalPaid,
+          amount_applied: totalPaid,
+          amount_pending: calculatedTotal - totalPaid,
           payment_method: paymentMethod || 'cash',
-          payment_status: paidAmount && Number(paidAmount) >= calculatedTotal ? 'paid' : 
-                paidAmount && Number(paidAmount) > 0 ? 'partial' : 'pending',
+          payment_status: paymentStatus,
           sale_status: 'completed',
+          notes: notes || null,
           sale_items: {
-            create: items.map((item: any) => {
-              // Obtener precio del item (manejar diferentes nombres)
-              const pricePPV = item.price || item.unit_price_ppv || item.unitPricePPV || 0;
-              const pricePPH = item.unit_price_pph || item.unitPricePPH || 0;
-              
-              return {
-                product_id: item.productId,
-                quantity: item.quantity,
-                unit_price_ppv: pricePPV,
-                unit_price_pph: pricePPH,
-                subtotal: pricePPV * item.quantity,
-                total: pricePPV * item.quantity,
-                margin: (pricePPV - pricePPH) * item.quantity
-              };
-            })
-          }
+            create: itemsWithPrices
+          },
+          payments: paymentsToCreate.length > 0 ? {
+            create: paymentsToCreate
+          } : undefined
         },
         include: {
           sale_items: true,
           client: true,
-          user: true
+          user: true,
+          payments: true
         }
       });
 
