@@ -53,10 +53,10 @@ export class VentaController {
       let finalTotal = calculatedSubtotal;
       let appliedDiscountAmount = 0;
 
-      if (discountType === 'percentage' && discountPercentage) {
+      if (discountType === 'percentage' && discountPercentage && discountPercentage > 0) {
         appliedDiscountAmount = calculatedSubtotal * (discountPercentage / 100);
         finalTotal = calculatedSubtotal - appliedDiscountAmount;
-      } else if (discountType === 'fixed' && discountAmount) {
+      } else if (discountType === 'fixed' && discountAmount && discountAmount > 0) {
         appliedDiscountAmount = discountAmount;
         finalTotal = calculatedSubtotal - discountAmount;
       }
@@ -65,6 +65,8 @@ export class VentaController {
       let totalPaid = 0;
       let hasCredit = false;
       let paymentsToCreate = [];
+      let debtsToCreate = [];
+      let saleNumber = `V-${Date.now()}`; // Generar número de venta primero
 
       if (paymentItems && Array.isArray(paymentItems) && paymentItems.length > 0) {
         // Usar el array de pagos del body
@@ -72,22 +74,30 @@ export class VentaController {
           const amount = Number(payment.amount) || 0;
           const method = payment.method || 'cash';
           
-          // Solo sumar a totalPaid si NO es crédito
-          if (method.toLowerCase() !== 'credit' && method.toLowerCase() !== 'credito') {
-            totalPaid += amount;
-          }
-          
           if (method.toLowerCase() === 'credit' || method.toLowerCase() === 'credito') {
+            // Es crédito - no va a payments, va a client_debts
             hasCredit = true;
+            
+            // Acumular deuda para crear en client_debts después
+            debtsToCreate.push({
+              client_id: clientId,
+              total_debt: amount,
+              paid_amount: 0,
+              status: 'pending',
+              notes: `Deuda por venta ${saleNumber}`
+            });
+          } else {
+            // Es pago real - va a payments
+            totalPaid += amount;
+            
+            paymentsToCreate.push({
+              amount,
+              payment_method: method,
+              reference: payment.reference || null,
+              status: 'completed',
+              notes: payment.notes || null
+            });
           }
-
-          paymentsToCreate.push({
-            amount,
-            payment_method: method,
-            reference: payment.reference || null,
-            status: 'completed',
-            notes: payment.notes || null
-          });
         }
       } else {
         // Fallback: usar paidAmount del body
@@ -105,6 +115,8 @@ export class VentaController {
         }
       }
 
+      // ... después de procesar descuentos y pagos ...
+
       // Determinar estado de pago
       let paymentStatus = 'pending';
       if (totalPaid >= finalTotal) {
@@ -113,19 +125,14 @@ export class VentaController {
         paymentStatus = 'partial';
       }
 
-      // Si hay crédito y no se pagó el total, es parcial
-      if (hasCredit && totalPaid < finalTotal) {
-        paymentStatus = 'partial';
-      }
-
-      // Calcular montos aplicados y pendientes
+      // Calcular montos aplicados y pendientes (SOLO UNA VEZ)
       const amountApplied = totalPaid;
-      const amountPending = finalTotal - totalPaid;
+      const amountPending = Math.max(0, finalTotal - totalPaid);
 
-      // Crear venta con Prisma
+      // Crear venta con Prisma (SOLO UNA VEZ)
       const venta = await prisma.sales.create({
         data: {
-          sale_number: `V-${Date.now()}`,
+          sale_number: saleNumber,
           user_id: userId,
           client_id: clientId,
           subtotal: calculatedSubtotal,
@@ -154,6 +161,21 @@ export class VentaController {
           payments: true
         }
       });
+
+      // Crear deudas en client_debts
+      if (debtsToCreate.length > 0) {
+        for (const debt of debtsToCreate) {
+          await prisma.client_debt.create({
+            data: {
+              client_id: debt.client_id,
+              total_debt: debt.total_debt,
+              paid_amount: 0,
+              status: 'pending',
+              notes: debt.notes
+            }
+          });
+        }
+      }
 
       res.status(201).json({
         success: true,
