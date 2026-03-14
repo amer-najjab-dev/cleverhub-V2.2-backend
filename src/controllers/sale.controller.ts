@@ -6,7 +6,17 @@ export class VentaController {
   async crear(req: Request, res: Response) {
     console.log('Payload recibido:', JSON.stringify(req.body, null, 2));
     try {
-      const { userId, clientId, paymentMethod, items, payments: paymentItems, notes } = req.body;
+      const { 
+        userId, 
+        clientId, 
+        paymentMethod, 
+        items, 
+        payments: paymentItems, 
+        notes,
+        discountType: discountTypeBody,
+        discountPercentage: discountPercentageBody,
+        discountAmount: discountAmountBody
+      } = req.body;
       
       if (!userId || !items || !items.length) {
         return res.status(400).json({ error: 'Faltan datos: userId, items' });
@@ -34,9 +44,23 @@ export class VentaController {
         });
       }
 
-      const calculatedTotal = calculatedSubtotal;
+      // Procesar descuentos
+      const discountAmount = Number(discountAmountBody || 0);
+      const discountPercentage = discountPercentageBody ? Number(discountPercentageBody) : null;
+      const discountType = discountTypeBody || null;
 
-      // Procesar pagos
+      // Calcular total con descuento
+      let finalTotal = calculatedSubtotal;
+      let appliedDiscountAmount = 0;
+
+      if (discountType === 'percentage' && discountPercentage) {
+        appliedDiscountAmount = calculatedSubtotal * (discountPercentage / 100);
+        finalTotal = calculatedSubtotal - appliedDiscountAmount;
+      } else if (discountType === 'fixed' && discountAmount) {
+        appliedDiscountAmount = discountAmount;
+        finalTotal = calculatedSubtotal - discountAmount;
+      }
+
       // Procesar pagos
       let totalPaid = 0;
       let hasCredit = false;
@@ -83,20 +107,20 @@ export class VentaController {
 
       // Determinar estado de pago
       let paymentStatus = 'pending';
-      if (totalPaid >= calculatedTotal) {
+      if (totalPaid >= finalTotal) {
         paymentStatus = 'paid';
       } else if (totalPaid > 0) {
         paymentStatus = 'partial';
       }
 
       // Si hay crédito y no se pagó el total, es parcial
-      if (hasCredit && totalPaid < calculatedTotal) {
+      if (hasCredit && totalPaid < finalTotal) {
         paymentStatus = 'partial';
       }
 
       // Calcular montos aplicados y pendientes
       const amountApplied = totalPaid;
-      const amountPending = calculatedTotal - totalPaid;
+      const amountPending = finalTotal - totalPaid;
 
       // Crear venta con Prisma
       const venta = await prisma.sales.create({
@@ -105,7 +129,10 @@ export class VentaController {
           user_id: userId,
           client_id: clientId,
           subtotal: calculatedSubtotal,
-          total: calculatedTotal,
+          discount_amount: appliedDiscountAmount,
+          discount_percentage: discountPercentage,
+          discount_type: discountType,
+          total: finalTotal,
           paid_amount: totalPaid,
           amount_applied: amountApplied,
           amount_pending: amountPending,
@@ -154,7 +181,7 @@ export class VentaController {
           },
           client: true,
           user: true,
-          payments: true // Incluir pagos en la respuesta
+          payments: true
         }
       });
       
@@ -211,7 +238,7 @@ export class VentaController {
               product: true
             }
           },
-          payments: true // Incluir pagos en la lista
+          payments: true
         },
         orderBy: {
           created_at: 'desc'
