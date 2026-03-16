@@ -77,8 +77,18 @@ class ClientController {
     }
     async create(req, res) {
         try {
+            const { firstName, lastName, phone, email, dni, ...rest } = req.body;
+            // Mapear camelCase a snake_case
+            const clientData = {
+                first_name: firstName,
+                last_name: lastName,
+                phone,
+                email,
+                dni,
+                ...rest
+            };
             const client = await server_1.prisma.clients.create({
-                data: req.body,
+                data: clientData,
             });
             res.json({
                 success: true,
@@ -96,9 +106,19 @@ class ClientController {
     async update(req, res) {
         try {
             const { id } = req.params;
+            const { firstName, lastName, phone, email, dni, ...rest } = req.body;
+            // Mapear camelCase a snake_case
+            const clientData = {
+                first_name: firstName,
+                last_name: lastName,
+                phone,
+                email,
+                dni,
+                ...rest
+            };
             const client = await server_1.prisma.clients.update({
                 where: { id: Number(id) },
-                data: req.body,
+                data: clientData,
             });
             res.json({
                 success: true,
@@ -187,6 +207,33 @@ class ClientController {
             });
         }
     }
+    async getClientPurchases(req, res) {
+        try {
+            const clientId = parseInt(req.params.clientId);
+            const purchases = await server_1.prisma.sales.findMany({
+                where: { client_id: clientId },
+                include: {
+                    sale_items: {
+                        include: {
+                            product: true
+                        }
+                    }
+                },
+                orderBy: { created_at: 'desc' }
+            });
+            res.json({
+                success: true,
+                data: purchases
+            });
+        }
+        catch (error) {
+            console.error('Error getting client purchases:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message
+            });
+        }
+    }
     // ========== HEALTH RECORDS ==========
     async getHealthRecords(req, res) {
         try {
@@ -250,7 +297,7 @@ class ClientController {
                     blood_pressure_diastolic: bloodPressureDiastolic,
                     weight,
                     heart_rate: heartRate,
-                    record_date: new Date(recordDate),
+                    record_date: recordDate ? new Date(recordDate) : new Date(),
                     notes,
                     glucose_status: glucoseStatus,
                     blood_pressure_status: bloodPressureStatus,

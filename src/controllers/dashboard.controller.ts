@@ -222,6 +222,9 @@ export class DashboardController {
         case 'month':
           startDate = new Date(now.setMonth(now.getMonth() - 1));
           break;
+        case 'quarter':
+          startDate = new Date(now.setMonth(now.getMonth() - 3));
+          break;
         default:
           startDate = new Date(now.setDate(now.getDate() - 7));
       }
@@ -251,13 +254,31 @@ export class DashboardController {
           const product = await prisma.products.findUnique({
             where: { id: item.product_id }
           });
+
+          // Obtener los items de venta para este producto en el período
+          const saleItems = await prisma.sale_items.findMany({
+            where: {
+              product_id: item.product_id,
+              sale: {
+                created_at: { gte: startDate },
+                sale_status: 'completed'
+              }
+            }
+          });
+
+          // Calcular margen total y porcentaje
+          const totalMargin = saleItems.reduce((sum, si) => sum + Number(si.margin || 0), 0);
+          const totalRevenue = Number(item._sum.total || 0);
+          const marginPercentage = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0;
+
           return {
             id: item.product_id,
             name: product?.name || 'Unknown',
             category: product?.category || 'N/A',
-            sale: item._sum.quantity || 0,
-            change: Math.floor(Math.random() * 30) - 5,
-            revenue: item._sum.total || 0
+            quantity: item._sum.quantity || 0,
+            revenue: totalRevenue,
+            margin: totalMargin,
+            marginPercentage: Number(marginPercentage.toFixed(1))
           };
         })
       );

@@ -15,6 +15,7 @@ router.delete('/:id', (req, res) => client_controller_1.clientController.delete(
 router.get('/:id/loyalty', (req, res) => client_controller_1.clientController.getLoyaltyPoints(req, res));
 // Rutas de deudas
 router.get('/:id/debts', (req, res) => client_controller_1.clientController.getDebts(req, res));
+router.get('/:clientId/purchases', (req, res) => client_controller_1.clientController.getClientPurchases(req, res));
 // ===== HEALTH RECORDS =====
 router.get('/:clientId/health-records', (req, res) => client_controller_1.clientController.getHealthRecords(req, res));
 router.post('/:clientId/health-records', (req, res) => client_controller_1.clientController.createHealthRecord(req, res));
