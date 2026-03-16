@@ -66,7 +66,7 @@ export class VentaController {
       let hasCredit = false;
       let paymentsToCreate = [];
       let debtsToCreate = [];
-      let saleNumber = `V-${Date.now()}`; // Generar número de venta primero
+      let saleNumber = `V-${Date.now()}`;
 
       if (paymentItems && Array.isArray(paymentItems) && paymentItems.length > 0) {
         // Usar el array de pagos del body
@@ -74,11 +74,12 @@ export class VentaController {
           const amount = Number(payment.amount) || 0;
           const method = payment.method || 'cash';
           
-          if (method.toLowerCase() === 'credit' || method.toLowerCase() === 'credito') {
+          const methodLower = method.toLowerCase();
+          const isCredit = methodLower === 'credit' || methodLower === 'credito';
+          
+          if (isCredit) {
             // Es crédito - no va a payments, va a client_debts
             hasCredit = true;
-            
-            // Acumular deuda para crear en client_debts después
             debtsToCreate.push({
               client_id: clientId,
               total_debt: amount,
@@ -87,9 +88,8 @@ export class VentaController {
               notes: `Deuda por venta ${saleNumber}`
             });
           } else {
-            // Es pago real - va a payments
+            // Es pago real - va a payments y suma a totalPaid
             totalPaid += amount;
-            
             paymentsToCreate.push({
               amount,
               payment_method: method,
