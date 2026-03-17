@@ -210,30 +210,44 @@ export class DashboardController {
   async getTopProducts(req: Request, res: Response) {
     try {
       const limit = Number(req.query.limit) || 10;
-      const period = (req.query.period as string) || 'week';
+      const period = req.query.period as string;
+      const startDateParam = req.query.startDate as string;
+      const endDateParam = req.query.endDate as string;
       
-      const now = new Date();
       let startDate: Date;
+      let endDate: Date = new Date();
       
-      switch(period) {
-        case 'week':
-          startDate = new Date(now.setDate(now.getDate() - 7));
-          break;
-        case 'month':
-          startDate = new Date(now.setMonth(now.getMonth() - 1));
-          break;
-        case 'quarter':
-          startDate = new Date(now.setMonth(now.getMonth() - 3));
-          break;
-        default:
-          startDate = new Date(now.setDate(now.getDate() - 7));
+      // Si se proporcionan fechas personalizadas
+      if (startDateParam && endDateParam) {
+        startDate = new Date(startDateParam);
+        endDate = new Date(endDateParam);
+        endDate.setHours(23, 59, 59, 999); // Final del día
+      } else {
+        // Usar período predefinido
+        const now = new Date();
+        switch(period) {
+          case 'week':
+            startDate = new Date(now.setDate(now.getDate() - 7));
+            break;
+          case 'month':
+            startDate = new Date(now.setMonth(now.getMonth() - 1));
+            break;
+          case 'quarter':
+            startDate = new Date(now.setMonth(now.getMonth() - 3));
+            break;
+          default:
+            startDate = new Date(now.setDate(now.getDate() - 7));
+        }
       }
 
       const topProducts = await prisma.sale_items.groupBy({
         by: ['product_id'],
         where: {
           sale: {
-            created_at: { gte: startDate },
+            created_at: { 
+              gte: startDate,
+              lte: endDate
+            },
             sale_status: 'completed'
           }
         },
@@ -260,7 +274,10 @@ export class DashboardController {
             where: {
               product_id: item.product_id,
               sale: {
-                created_at: { gte: startDate },
+                created_at: { 
+                  gte: startDate,
+                  lte: endDate
+                },
                 sale_status: 'completed'
               }
             }
