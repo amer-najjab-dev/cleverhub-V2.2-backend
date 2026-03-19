@@ -33,13 +33,42 @@ export class ClientController {
           skip,
           take: Number(limit),
           orderBy: { created_at: 'desc' },
+          include: {
+            sales: {
+              orderBy: { created_at: 'desc' },
+              take: 1,
+              select: {
+                created_at: true
+              }
+            },
+            client_debts: {  // ← CORREGIDO: plural
+              where: {
+                pending_amount: { gt: 0 }
+              },
+              select: {
+                pending_amount: true
+              }
+            }
+          }
         }),
         prisma.clients.count({ where }),
       ]);
 
+      // Tipado correcto para el reduce
+      const clientsWithDetails = clients.map((client: any) => ({
+        ...client,
+        last_purchase_date: client.sales?.[0]?.created_at || null,
+        total_debt: client.client_debts?.reduce(
+          (sum: number, debt: any) => sum + Number(debt.pending_amount), 
+          0
+        ) || 0,
+        sales: undefined,
+        client_debts: undefined
+      }));
+
       res.json({
         success: true,
-        data: clients,
+        data: clientsWithDetails,
         meta: {
           total,
           page: Number(page),
