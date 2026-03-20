@@ -480,6 +480,110 @@ export class ClientController {
       });
     }
   }
+  async registerDebtPayment(req: Request, res: Response) {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      const { amount, notes } = req.body;
+
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ error: 'Monto inválido' });
+      }
+
+      // Obtener deuda activa (con pending_amount > 0)
+      const activeDebt = await prisma.client_debt.findFirst({
+        where: {
+          client_id: clientId,
+          pending_amount: { gt: 0 }
+        },
+        orderBy: { created_at: 'desc' }
+      });
+
+      if (!activeDebt) {
+        return res.status(404).json({ error: 'No hay deuda pendiente' });
+      }
+
+      const currentPaid = Number(activeDebt.paid_amount);
+      const currentTotal = Number(activeDebt.total_debt);
+      const newPaidAmount = currentPaid + amount;
+      const newPendingAmount = currentTotal - newPaidAmount;
+
+      // Actualizar la deuda
+      const updatedDebt = await prisma.client_debt.update({
+        where: { id: activeDebt.id },
+        data: {
+          paid_amount: newPaidAmount,
+          pending_amount: newPendingAmount,
+          status: newPendingAmount === 0 ? 'paid' : 'partial',
+          updated_at: new Date(),
+          last_payment_date: new Date(),
+          notes: notes ? `${activeDebt.notes || ''}\n${notes}`.trim() : activeDebt.notes
+        }
+      });
+
+      res.json({
+        success: true,
+        message: 'Pago registrado correctamente',
+        data: updatedDebt
+      });
+    } catch (error: any) {
+      console.error('Error registering payment:', error);
+      res.status(500).json({ error: error.message || 'Error al registrar el pago' });
+    }
+  }
+
+  async get_pending_amount(req: Request, res: Response) {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      
+      const activeDebt = await prisma.client_debt.findFirst({
+        where: {
+          client_id: clientId,
+          pending_amount: { gt: 0 }
+        },
+        orderBy: { created_at: 'desc' }
+      });
+
+      const pendingAmount = activeDebt ? Number(activeDebt.pending_amount) : 0;
+
+      res.json({
+        success: true,
+        data: {
+          clientId,
+          pendingAmount
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting pending amount:', error);
+      res.status(500).json({ error: error.message || 'Error al obtener el monto pendiente' });
+    }
+  }
+
+  async getPendingAmount(req: Request, res: Response) {
+    try {
+      const clientId = parseInt(req.params.clientId);
+      
+      const activeDebt = await prisma.client_debt.findFirst({
+        where: {
+          client_id: clientId,
+          pending_amount: { gt: 0 }
+        },
+        orderBy: { created_at: 'desc' }
+      });
+
+      const pendingAmount = activeDebt ? Number(activeDebt.pending_amount) : 0;
+
+      res.json({
+        success: true,
+        data: {
+          clientId,
+          pendingAmount
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting pending amount:', error);
+      res.status(500).json({ error: error.message || 'Error al obtener el monto pendiente' });
+    }
+  }
 }
 
 export const clientController = new ClientController();

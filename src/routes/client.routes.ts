@@ -20,6 +20,10 @@ router.get('/:id/loyalty', (req, res) => clientController.getLoyaltyPoints(req, 
 router.get('/:id/debts', (req, res) => clientController.getDebts(req, res));
 router.get('/:clientId/purchases', (req, res) => clientController.getClientPurchases(req, res));
 
+// Rutas de pagos de deuda
+router.post('/:clientId/debt/payments', (req, res) => clientController.registerDebtPayment(req, res));
+router.get('/:clientId/debt/pending', (req, res) => clientController.getPendingAmount(req, res));
+
 // ===== HEALTH RECORDS =====
 router.get('/:clientId/health-records', (req, res) => clientController.getHealthRecords(req, res));
 router.post('/:clientId/health-records', (req, res) => clientController.createHealthRecord(req, res));
