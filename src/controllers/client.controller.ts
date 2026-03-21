@@ -489,7 +489,7 @@ export class ClientController {
         return res.status(400).json({ error: 'Monto inválido' });
       }
 
-      // Obtener deuda activa (con pending_amount > 0)
+      // Obtener deuda activa
       const activeDebt = await prisma.client_debt.findFirst({
         where: {
           client_id: clientId,
@@ -505,15 +505,13 @@ export class ClientController {
       const currentPaid = Number(activeDebt.paid_amount);
       const currentTotal = Number(activeDebt.total_debt);
       const newPaidAmount = currentPaid + amount;
-      const newPendingAmount = currentTotal - newPaidAmount;
 
-      // Actualizar la deuda
+      // Actualizar SOLO paid_amount, pending_amount se calculará automáticamente
       const updatedDebt = await prisma.client_debt.update({
         where: { id: activeDebt.id },
         data: {
           paid_amount: newPaidAmount,
-          pending_amount: newPendingAmount,
-          status: newPendingAmount === 0 ? 'paid' : 'partial',
+          status: newPaidAmount >= currentTotal ? 'paid' : 'partial',
           updated_at: new Date(),
           last_payment_date: new Date(),
           notes: notes ? `${activeDebt.notes || ''}\n${notes}`.trim() : activeDebt.notes
