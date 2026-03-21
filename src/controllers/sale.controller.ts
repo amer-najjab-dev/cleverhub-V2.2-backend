@@ -73,12 +73,15 @@ export class VentaController {
         for (const payment of paymentItems) {
           const amount = Number(payment.amount) || 0;
           const method = payment.method || 'cash';
+
+          console.log('💰 Procesando pago:', { amount, method, clientId });
           
           const methodLower = method.toLowerCase();
           const isCredit = methodLower === 'credit' || methodLower === 'credito';
           
           if (isCredit) {
             // Es crédito - no va a payments, va a client_debts
+             console.log('💳 Es crédito, creando deuda por:', amount);
             hasCredit = true;
             debtsToCreate.push({
               client_id: clientId,
