@@ -121,11 +121,14 @@ export class VentaController {
       // ... después de procesar descuentos y pagos ...
 
       // Determinar estado de pago
+      // Determinar estado de pago
       let paymentStatus = 'pending';
       if (totalPaid >= finalTotal) {
         paymentStatus = 'paid';
-      } else if (totalPaid > 0) {
+      } else if (totalPaid > 0 && totalPaid < finalTotal) {
         paymentStatus = 'partial';
+      } else {
+        paymentStatus = 'pending';
       }
 
       // Calcular montos aplicados y pendientes (SOLO UNA VEZ)
