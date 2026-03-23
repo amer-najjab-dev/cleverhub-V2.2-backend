@@ -492,13 +492,16 @@ export class ClientController {
       let remainingAmount = amount;
       let updatedDebts = [];
 
-      // Obtener todas las deudas activas (pending_amount > 0) ordenadas por fecha ASC (FIFO)
+      // Obtener todas las deudas activas ordenadas por fecha ASC (FIFO)
       const activeDebts = await prisma.client_debt.findMany({
         where: {
           client_id: clientId,
           pending_amount: { gt: 0 }
         },
-        orderBy: { created_at: 'asc' }
+        orderBy: { created_at: 'asc' },
+        include: {
+          client: true
+        }
       });
 
       if (activeDebts.length === 0) {
@@ -517,7 +520,7 @@ export class ClientController {
         const applyAmount = Math.min(remainingAmount, currentPending);
         const newPaidAmount = currentPaid + applyAmount;
         
-        // SOLO actualizar paid_amount (pending_amount se calcula automáticamente)
+        // ACTUALIZAR client_debt
         await prisma.client_debt.update({
           where: { id: debt.id },
           data: {
@@ -529,8 +532,36 @@ export class ClientController {
           }
         });
         
+        // BUSCAR Y ACTUALIZAR LA VENTA ASOCIADA A ESTA DEUDA
+        // Buscar la venta con crédito pendiente más antigua
+        const venta = await prisma.sales.findFirst({
+          where: {
+            client_id: clientId,
+            payment_status: 'pending',
+            amount_pending: { gt: 0 }
+          },
+          orderBy: { created_at: 'asc' }
+        });
+        
+        if (venta) {
+          const newAmountApplied = Number(venta.amount_applied) + applyAmount;
+          const newAmountPending = Number(venta.amount_pending) - applyAmount;
+          const newPaymentStatus = newAmountPending === 0 ? 'paid' : 'partial';
+          
+          await prisma.sales.update({
+            where: { id: venta.id },
+            data: {
+              amount_applied: newAmountApplied,
+              amount_pending: newAmountPending,
+              payment_status: newPaymentStatus,
+              updated_at: new Date()
+            }
+          });
+        }
+        
         updatedDebts.push({
           id: debt.id,
+          saleId: venta?.id,
           appliedAmount: applyAmount,
           newPaidAmount,
           totalDebt: currentTotal
