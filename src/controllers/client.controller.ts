@@ -498,7 +498,7 @@ export class ClientController {
           client_id: clientId,
           pending_amount: { gt: 0 }
         },
-        orderBy: { created_at: 'asc' } // ← FIFO: la más antigua primero
+        orderBy: { created_at: 'asc' }
       });
 
       if (activeDebts.length === 0) {
@@ -516,15 +516,13 @@ export class ClientController {
         // Calcular cuánto aplicar a esta deuda
         const applyAmount = Math.min(remainingAmount, currentPending);
         const newPaidAmount = currentPaid + applyAmount;
-        const newPendingAmount = currentPending - applyAmount;
         
-        // Actualizar la deuda
+        // SOLO actualizar paid_amount (pending_amount se calcula automáticamente)
         await prisma.client_debt.update({
           where: { id: debt.id },
           data: {
             paid_amount: newPaidAmount,
-            pending_amount: newPendingAmount,
-            status: newPendingAmount === 0 ? 'paid' : 'partial',
+            status: newPaidAmount >= currentTotal ? 'paid' : 'partial',
             updated_at: new Date(),
             last_payment_date: new Date(),
             notes: notes ? `${debt.notes || ''}\n${notes}`.trim() : debt.notes
@@ -534,14 +532,12 @@ export class ClientController {
         updatedDebts.push({
           id: debt.id,
           appliedAmount: applyAmount,
-          remainingAfter: newPendingAmount
+          newPaidAmount,
+          totalDebt: currentTotal
         });
         
         remainingAmount -= applyAmount;
       }
-
-      // Registrar el pago en la tabla payments (opcional, para auditoría)
-      // Aquí podrías crear un registro en payments si lo deseas
 
       res.json({
         success: true,
