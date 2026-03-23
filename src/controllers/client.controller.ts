@@ -605,8 +605,6 @@ export class ClientController {
           newPaidAmount,
           totalDebt: currentTotal
         });
-        
-        remainingAmount -= applyAmount;
       }
 
       res.json({
