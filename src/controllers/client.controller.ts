@@ -489,40 +489,70 @@ export class ClientController {
         return res.status(400).json({ error: 'Monto inválido' });
       }
 
-      // Obtener deuda activa
-      const activeDebt = await prisma.client_debt.findFirst({
+      let remainingAmount = amount;
+      let updatedDebts = [];
+
+      // Obtener todas las deudas activas (pending_amount > 0) ordenadas por fecha ASC (FIFO)
+      const activeDebts = await prisma.client_debt.findMany({
         where: {
           client_id: clientId,
           pending_amount: { gt: 0 }
         },
-        orderBy: { created_at: 'desc' }
+        orderBy: { created_at: 'asc' } // ← FIFO: la más antigua primero
       });
 
-      if (!activeDebt) {
-        return res.status(404).json({ error: 'No hay deuda pendiente' });
+      if (activeDebts.length === 0) {
+        return res.status(404).json({ error: 'No hay deudas pendientes' });
       }
 
-      const currentPaid = Number(activeDebt.paid_amount);
-      const currentTotal = Number(activeDebt.total_debt);
-      const newPaidAmount = currentPaid + amount;
+      // Aplicar el pago a las deudas en orden FIFO
+      for (const debt of activeDebts) {
+        if (remainingAmount <= 0) break;
 
-      // Actualizar SOLO paid_amount, pending_amount se calculará automáticamente
-      const updatedDebt = await prisma.client_debt.update({
-        where: { id: activeDebt.id },
-        data: {
-          paid_amount: newPaidAmount,
-          status: newPaidAmount >= currentTotal ? 'paid' : 'partial',
-          updated_at: new Date(),
-          last_payment_date: new Date(),
-          notes: notes ? `${activeDebt.notes || ''}\n${notes}`.trim() : activeDebt.notes
-        }
-      });
+        const currentPending = Number(debt.pending_amount);
+        const currentPaid = Number(debt.paid_amount);
+        const currentTotal = Number(debt.total_debt);
+        
+        // Calcular cuánto aplicar a esta deuda
+        const applyAmount = Math.min(remainingAmount, currentPending);
+        const newPaidAmount = currentPaid + applyAmount;
+        const newPendingAmount = currentPending - applyAmount;
+        
+        // Actualizar la deuda
+        await prisma.client_debt.update({
+          where: { id: debt.id },
+          data: {
+            paid_amount: newPaidAmount,
+            pending_amount: newPendingAmount,
+            status: newPendingAmount === 0 ? 'paid' : 'partial',
+            updated_at: new Date(),
+            last_payment_date: new Date(),
+            notes: notes ? `${debt.notes || ''}\n${notes}`.trim() : debt.notes
+          }
+        });
+        
+        updatedDebts.push({
+          id: debt.id,
+          appliedAmount: applyAmount,
+          remainingAfter: newPendingAmount
+        });
+        
+        remainingAmount -= applyAmount;
+      }
+
+      // Registrar el pago en la tabla payments (opcional, para auditoría)
+      // Aquí podrías crear un registro en payments si lo deseas
 
       res.json({
         success: true,
-        message: 'Pago registrado correctamente',
-        data: updatedDebt
+        message: `Pago de ${amount} MAD aplicado correctamente`,
+        data: {
+          appliedAmount: amount - remainingAmount,
+          remainingAmount: remainingAmount,
+          updatedDebts
+        }
       });
+      
     } catch (error: any) {
       console.error('Error registering payment:', error);
       res.status(500).json({ error: error.message || 'Error al registrar el pago' });
