@@ -544,8 +544,11 @@ export class ClientController {
         });
         
         if (venta) {
-          const newAmountApplied = Number(venta.amount_applied) + applyAmount;
-          const newAmountPending = Number(venta.amount_pending) - applyAmount;
+          // Limitar el monto a aplicar por el amount_pending de la venta
+          const ventaPending = Number(venta.amount_pending);
+          const amountToApply = Math.min(applyAmount, ventaPending);
+          const newAmountApplied = Number(venta.amount_applied) + amountToApply;
+          const newAmountPending = ventaPending - amountToApply;
           const newPaymentStatus = newAmountPending === 0 ? 'paid' : 'partial';
           
           await prisma.sales.update({
@@ -557,6 +560,9 @@ export class ClientController {
               updated_at: new Date()
             }
           });
+          
+          // Si el pago no se aplicó completamente a esta venta, continuar con la siguiente
+          remainingAmount = remainingAmount - amountToApply;
         }
         
         updatedDebts.push({
