@@ -168,18 +168,47 @@ export class VentaController {
         }
       });
 
-      // Crear deudas en client_debts
+      // Crear o actualizar deudas en client_debts
       if (debtsToCreate.length > 0) {
         for (const debt of debtsToCreate) {
-          await prisma.client_debt.create({
-            data: {
+          // Buscar si existe una deuda activa (pending_amount > 0) para este cliente
+          const existingDebt = await prisma.client_debt.findFirst({
+            where: {
               client_id: debt.client_id,
-              total_debt: debt.total_debt,
-              paid_amount: 0,
-              status: 'pending',
-              notes: debt.notes
-            }
+              pending_amount: { gt: 0 }
+            },
+            orderBy: { created_at: 'desc' }
           });
+
+          if (existingDebt) {
+            // Actualizar la deuda existente sumando la nueva deuda
+            const newTotalDebt = Number(existingDebt.total_debt) + debt.total_debt;
+            const newPendingAmount = Number(existingDebt.pending_amount) + debt.total_debt;
+            
+            await prisma.client_debt.update({
+              where: { id: existingDebt.id },
+              data: {
+                total_debt: newTotalDebt,
+                pending_amount: newPendingAmount,
+                status: newPendingAmount > 0 ? 'pending' : 'paid',
+                updated_at: new Date(),
+                notes: existingDebt.notes 
+                  ? `${existingDebt.notes}\n${debt.notes}` 
+                  : debt.notes
+              }
+            });
+          } else {
+            // Crear nueva deuda si no existe ninguna activa
+            await prisma.client_debt.create({
+              data: {
+                client_id: debt.client_id,
+                total_debt: debt.total_debt,
+                paid_amount: 0,
+                status: 'pending',
+                notes: debt.notes
+              }
+            });
+          }
         }
       }
 
