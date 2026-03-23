@@ -171,7 +171,7 @@ export class VentaController {
       // Crear o actualizar deudas en client_debts
       if (debtsToCreate.length > 0) {
         for (const debt of debtsToCreate) {
-          // Buscar si existe una deuda activa (pending_amount > 0) para este cliente
+          // Buscar si existe una deuda activa para este cliente
           const existingDebt = await prisma.client_debt.findFirst({
             where: {
               client_id: debt.client_id,
@@ -182,15 +182,16 @@ export class VentaController {
 
           if (existingDebt) {
             // Actualizar la deuda existente sumando la nueva deuda
+            // SOLO actualizar total_debt y paid_amount (pending_amount es GENERATED)
             const newTotalDebt = Number(existingDebt.total_debt) + debt.total_debt;
-            const newPendingAmount = Number(existingDebt.pending_amount) + debt.total_debt;
+            const newPaidAmount = Number(existingDebt.paid_amount); // Mantener paid_amount
             
             await prisma.client_debt.update({
               where: { id: existingDebt.id },
               data: {
                 total_debt: newTotalDebt,
-                pending_amount: newPendingAmount,
-                status: newPendingAmount > 0 ? 'pending' : 'paid',
+                paid_amount: newPaidAmount,
+                status: newTotalDebt > newPaidAmount ? 'pending' : 'paid',
                 updated_at: new Date(),
                 notes: existingDebt.notes 
                   ? `${existingDebt.notes}\n${debt.notes}` 
