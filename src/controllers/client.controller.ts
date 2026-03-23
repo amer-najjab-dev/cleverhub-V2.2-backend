@@ -537,7 +537,7 @@ export class ClientController {
         const venta = await prisma.sales.findFirst({
           where: {
             client_id: clientId,
-            payment_status: 'pending',
+            payment_status: { in: ['pending', 'partial'] }, // ← Incluir partial
             amount_pending: { gt: 0 }
           },
           orderBy: { created_at: 'asc' }
