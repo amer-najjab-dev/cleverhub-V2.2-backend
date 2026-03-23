@@ -251,15 +251,48 @@ export class ClientController {
         orderBy: { created_at: 'desc' },
       });
 
+      if (debts.length === 0) {
+        return res.json({
+          success: true,
+          data: []
+        });
+      }
+
+      // Consolidar todas las deudas en una sola
+      const totalDebt = debts.reduce((sum, d) => sum + Number(d.total_debt), 0);
+      const totalPaid = debts.reduce((sum, d) => sum + Number(d.paid_amount), 0);
+      const totalPending = debts.reduce((sum, d) => sum + Number(d.pending_amount), 0);
+      
+      // Determinar estado consolidado
+      let consolidatedStatus = 'paid';
+      if (totalPending > 0 && totalPaid > 0) {
+        consolidatedStatus = 'partial';
+      } else if (totalPending > 0) {
+        consolidatedStatus = 'pending';
+      }
+      
+      const consolidatedDebt = {
+        id: debts[0].id,
+        client_id: Number(id),
+        total_debt: totalDebt,
+        paid_amount: totalPaid,
+        pending_amount: totalPending,
+        status: consolidatedStatus,
+        last_payment_date: debts[0].last_payment_date,
+        notes: debts.map(d => d.notes).filter(Boolean).join('\n'),
+        created_at: debts[0].created_at,
+        updated_at: debts[0].updated_at
+      };
+
       res.json({
         success: true,
-        data: debts,
+        data: consolidatedDebt
       });
     } catch (error: any) {
       console.error('Error getting client debts:', error);
       res.status(500).json({
         success: false,
-        message: error.message,
+        message: error.message
       });
     }
   }
