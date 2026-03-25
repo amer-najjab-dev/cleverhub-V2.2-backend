@@ -153,12 +153,15 @@ export class ClientController {
     try {
       const id = parseInt(req.params.id);
       
-      // Verificar si el cliente tiene ventas asociadas
-      const salesCount = await prisma.sales.count({
-        where: { client_id: id }
+      // Verificar si el cliente tiene deuda pendiente
+      const activeDebt = await prisma.client_debt.findFirst({
+        where: {
+          client_id: id,
+          pending_amount: { gt: 0 }
+        }
       });
       
-      const canDelete = salesCount === 0;
+      const canDelete = !activeDebt;
       
       res.json({
         success: true,
