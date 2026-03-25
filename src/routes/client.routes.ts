@@ -12,6 +12,7 @@ router.get('/:id', (req, res) => clientController.getById(req, res));
 router.post('/', (req, res) => clientController.create(req, res));
 router.put('/:id', (req, res) => clientController.update(req, res));
 router.delete('/:id', (req, res) => clientController.delete(req, res));
+router.get('/:id/can-delete', clientController.checkCanDelete);
 
 // Rutas de loyalty
 router.get('/:id/loyalty', (req, res) => clientController.getLoyaltyPoints(req, res));

@@ -149,6 +149,29 @@ export class ClientController {
       });
     }
   }
+  async checkCanDelete(req: Request, res: Response) {
+    try {
+      const id = parseInt(req.params.id);
+      
+      // Verificar si el cliente tiene ventas asociadas
+      const salesCount = await prisma.sales.count({
+        where: { client_id: id }
+      });
+      
+      const canDelete = salesCount === 0;
+      
+      res.json({
+        success: true,
+        data: { canDelete }
+      });
+    } catch (error: any) {
+      console.error('Error checking if client can be deleted:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+  }
 
   async update(req: Request, res: Response) {
     try {
