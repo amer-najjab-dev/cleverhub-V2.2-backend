@@ -100,7 +100,8 @@ app.use(
       secure: isProd, // true en producción (HTTPS)
       maxAge: 1000 * 60 * 60 * 8, // 8 horas
       sameSite: isProd ? 'none' : 'lax', // 'none' permite cross-site
-      path: '/'
+      path: '/',
+      domain: '.up.railway.app'
     },
   })
 );
