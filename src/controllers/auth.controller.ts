@@ -1,7 +1,7 @@
-// src/controllers/auth.controller.ts
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import { prisma } from '../server';
+import { generateToken, verifyToken, extractToken } from '../utils/jwt';
 
 export class AuthController {
   async register(req: Request, res: Response) {
@@ -15,7 +15,6 @@ export class AuthController {
         });
       }
 
-      // Verificar si el usuario ya existe
       const existingUser = await prisma.users.findUnique({
         where: { email }
       });
@@ -27,22 +26,20 @@ export class AuthController {
         });
       }
 
-      // Hashear contraseña
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Crear usuario - USANDO LOS NOMBRES DE COLUMNA DEL SCHEMA (snake_case)
       const user = await prisma.users.create({
         data: {
           email,
           password: hashedPassword,
-          full_name: fullName,  // ¡CORREGIDO! full_name en lugar de fullName
+          full_name: fullName,
           role,
-          is_active: true        // ¡CORREGIDO! is_active en lugar de isActive
+          is_active: true
         },
         select: {
           id: true,
           email: true,
-          full_name: true,      // ¡CORREGIDO!
+          full_name: true,
           role: true
         }
       });
@@ -53,7 +50,7 @@ export class AuthController {
         data: {
           id: user.id,
           email: user.email,
-          fullName: user.full_name,  // Mapear a camelCase para la respuesta
+          fullName: user.full_name,
           role: user.role
         }
       });
@@ -97,12 +94,18 @@ export class AuthController {
         });
       }
 
-      // Guardar en sesión
+      // Generar token JWT
+      const token = generateToken({
+        id: user.id,
+        email: user.email,
+        role: user.role || 'user'
+      });
+
+      // Mantener sesión por cookie para compatibilidad
       req.session.userId = user.id;
       req.session.userRole = user.role || undefined;
       req.session.userEmail = user.email;
 
-      // Guardar sesión explícitamente
       await new Promise((resolve, reject) => {
         req.session.save((err) => {
           if (err) reject(err);
@@ -116,9 +119,10 @@ export class AuthController {
         data: {
           id: user.id,
           email: user.email,
-          fullName: user.full_name,  // Mapear a camelCase
+          fullName: user.full_name,
           role: user.role
-        }
+        },
+        token
       });
 
     } catch (error: any) {
@@ -149,7 +153,23 @@ export class AuthController {
 
   async me(req: Request, res: Response) {
     try {
-      if (!req.session.userId) {
+      // Primero intentar con JWT
+      const token = extractToken(req);
+      let userId: number | null = null;
+      
+      if (token) {
+        const payload = verifyToken(token);
+        if (payload) {
+          userId = payload.id;
+        }
+      }
+      
+      // Fallback a sesión por cookie
+      if (!userId && req.session.userId) {
+        userId = req.session.userId;
+      }
+      
+      if (!userId) {
         return res.status(401).json({
           success: false,
           message: 'No autenticado'
@@ -157,11 +177,11 @@ export class AuthController {
       }
 
       const user = await prisma.users.findUnique({
-        where: { id: req.session.userId },
+        where: { id: userId },
         select: {
           id: true,
           email: true,
-          full_name: true,  // ¡CORREGIDO!
+          full_name: true,
           role: true
         }
       });
@@ -178,7 +198,7 @@ export class AuthController {
         data: {
           id: user.id,
           email: user.email,
-          fullName: user.full_name,  // Mapear a camelCase
+          fullName: user.full_name,
           role: user.role
         }
       });
