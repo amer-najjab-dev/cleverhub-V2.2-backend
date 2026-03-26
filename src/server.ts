@@ -151,6 +151,11 @@ app.get('/', (req, res) => {
 // 7. MANEJADOR DE ERRORES 404
 // ==========================================
 app.use((req, res) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
   res.status(404).json({ 
     success: false,
     error: 'Ruta no encontrada', 
