@@ -4,7 +4,22 @@ import { requireAuth } from '../middleware/auth';
 
 const router = Router();
 
-router.use(requireAuth);
+// Permitir OPTIONS sin autenticación para CORS
+router.options('*', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Region, Cookie');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
+
+// Aplicar autenticación solo para las rutas, no para OPTIONS
+router.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+  requireAuth(req, res, next);
+});
 
 // Rutas básicas de clientes
 router.get('/', (req, res) => clientController.getAll(req, res));
