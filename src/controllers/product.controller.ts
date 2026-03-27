@@ -12,7 +12,10 @@ export class ProductController {
       const where: any = { active: true };
 
       if (q) {
-        where.name = { contains: q as string, mode: 'insensitive' };
+        where.OR = [
+          { name: { contains: q as string, mode: 'insensitive' } },
+          { barcode: { contains: q as string, mode: 'insensitive' } }
+        ];
       }
       if (category) {
         where.category = category as string;
