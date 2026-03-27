@@ -8,7 +8,7 @@ datasource db {
 }
 
 model users {
-  id        Int      @id @default(autoincrement()) @map("id")  // CAMBIA ESTO TEMPORALMENTE
+  id        Int      @id @default(autoincrement()) @map("id")
   email     String   @unique @map("email")
   full_name String?  @map("full_name")
   role      String?  @default("employee") @map("role")
@@ -22,6 +22,11 @@ model users {
   ai_messages ai_generated_messages[]
   message_campaigns message_campaigns[]
   message_templates message_templates[]
+  
+  // RELACIONES RRHH ELIMINADAS TEMPORALMENTE
+  // employee employees?
+  // time_off_reviewed time_off_requests[] @relation("reviewer")
+  // shift_swap_reviewed shift_swap_requests[] @relation("reviewer")
 
   @@map("users")
 }
@@ -554,4 +559,133 @@ model supplier_phones {
 
   @@unique([supplier_id, number])
   @@index([supplier_id], map: "idx_supplier_phones_supplier_id")
+}
+
+// ====================== MODELOS RRHH ======================
+
+model shifts {
+  id          Int      @id @default(autoincrement())
+  name        String
+  start_time  String
+  end_time    String
+  is_guard    Boolean  @default(false)
+  min_employees_required Int @default(1)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+  
+  employees            employees[]
+  shift_assignments    shift_assignments[]
+  pharmacy_configs     pharmacy_configs[]
+  pharmacy_config_overrides pharmacy_config_overrides[]
+  
+  // RELACIONES INVERSAS
+  from_shift_swaps shift_swap_requests[] @relation("from_shift")
+  to_shift_swaps   shift_swap_requests[] @relation("to_shift")
+}
+
+model employees {
+  id                 Int      @id @default(autoincrement())
+  user_id            Int      @unique
+  default_shift_id   Int?
+  vacation_days      Float    @default(25)
+  vacation_days_used Float    @default(0)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @default(now())
+  
+  // RELACIÓN ELIMINADA TEMPORALMENTE
+  // user users @relation(fields: [user_id], references: [id])
+  
+  default_shift shifts? @relation(fields: [default_shift_id], references: [id])
+  shift_assignments shift_assignments[]
+  time_off_requests time_off_requests[]
+  shift_swap_requests_from shift_swap_requests[] @relation("from_employee")
+  shift_swap_requests_to   shift_swap_requests[] @relation("to_employee")
+}
+
+model shift_assignments {
+  id           Int      @id @default(autoincrement())
+  employee_id  Int
+  shift_id     Int
+  date         DateTime
+  created_at   DateTime @default(now())
+  updated_at   DateTime @default(now())
+  
+  employee employees @relation(fields: [employee_id], references: [id])
+  shift    shifts    @relation(fields: [shift_id], references: [id])
+  
+  @@unique([employee_id, date])
+}
+
+model time_off_requests {
+  id           Int      @id @default(autoincrement())
+  employee_id  Int
+  start_date   DateTime
+  end_date     DateTime
+  type         String   @default("vacation")
+  status       String   @default("pending")
+  notes        String?
+  reviewed_by  Int?
+  reviewed_at  DateTime?
+  coverage_warning Boolean @default(false)
+  coverage_details Json?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @default(now())
+  
+  employee employees @relation(fields: [employee_id], references: [id])
+  // reviewer users?    @relation(fields: [reviewed_by], references: [id]) // ELIMINADA
+}
+
+model shift_swap_requests {
+  id               Int      @id @default(autoincrement())
+  from_employee_id Int
+  to_employee_id   Int
+  from_shift_id    Int
+  to_shift_id      Int
+  date             DateTime
+  status           String   @default("pending")
+  notes            String?
+  reviewed_by      Int?
+  reviewed_at      DateTime?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @default(now())
+  
+  from_employee employees @relation("from_employee", fields: [from_employee_id], references: [id])
+  to_employee   employees @relation("to_employee", fields: [to_employee_id], references: [id])
+  from_shift    shifts    @relation("from_shift", fields: [from_shift_id], references: [id])
+  to_shift      shifts    @relation("to_shift", fields: [to_shift_id], references: [id])
+  // reviewer      users?    @relation(fields: [reviewed_by], references: [id]) // ELIMINADA
+}
+
+model pharmacy_configs {
+  id                   Int      @id @default(autoincrement())
+  shift_id             Int
+  min_employees_required Int    @default(1)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @default(now())
+  
+  shift shifts @relation(fields: [shift_id], references: [id])
+  
+  @@unique([shift_id])
+}
+
+model pharmacy_config_overrides {
+  id                   Int      @id @default(autoincrement())
+  shift_id             Int
+  date                 DateTime
+  min_employees_required Int
+  created_at           DateTime @default(now())
+  updated_at           DateTime @default(now())
+  
+  shift shifts @relation(fields: [shift_id], references: [id])
+  
+  @@unique([shift_id, date])
+}
+
+model holidays {
+  id         Int      @id @default(autoincrement())
+  name       String
+  date       DateTime
+  is_recurring Boolean @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
 }
