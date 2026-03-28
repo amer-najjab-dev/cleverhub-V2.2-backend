@@ -1,243 +1,95 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../server';
 
-// Función para obtener la semana del año (ISO week)
-function getWeekNumber(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
-
 export const coverageController = {
-  checkCoverage: async (req: Request, res: Response) => {
-    try {
-      const { startDate, endDate, employeeId } = req.body;
-      
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      const days: Date[] = [];
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        days.push(new Date(d));
-      }
-      
-      const shifts = await prisma.shifts.findMany();
-      const configs = await prisma.pharmacy_configs.findMany();
-      
-      const coverageResults = [];
-      const warnings = [];
-      
-      for (const day of days) {
-        const dateStr = day.toISOString().split('T')[0];
-        const weekNumber = getWeekNumber(day);
-        const year = day.getFullYear();
-        
-        for (const shift of shifts) {
-          // Para turnos de guardia, verificar si están en el horario configurado
-          if (shift.is_guard) {
-            const guardSchedule = await prisma.guard_schedules.findFirst({
-              where: {
-                shift_id: shift.id,
-                week_number: weekNumber,
-                year: year
-              }
-            });
-            
-            // Si es guardia y no está en el horario, saltar este turno
-            if (!guardSchedule) {
-              continue;
-            }
-          }
-          
-          const assignments = await prisma.shift_assignments.findMany({
-            where: {
-              shift_id: shift.id,
-              date: day
-            }
-          });
-          
-          const approvedRequests = await prisma.time_off_requests.findMany({
-            where: {
-              status: 'approved',
-              start_date: { lte: day },
-              end_date: { gte: day }
-            }
-          });
-          
-          const assignedIds = assignments.map(a => a.employee_id);
-          const vacationIds = approvedRequests.map(r => r.employee_id);
-          const availableIds = assignedIds.filter(id => !vacationIds.includes(id));
-          
-          let minRequired = shift.min_employees_required;
-          const override = await prisma.pharmacy_config_overrides.findFirst({
-            where: {
-              shift_id: shift.id,
-              date: day
-            }
-          });
-          if (override) {
-            minRequired = override.min_employees_required;
-          } else {
-            const config = configs.find(c => c.shift_id === shift.id);
-            if (config) minRequired = config.min_employees_required;
-          }
-          
-          const currentCount = availableIds.length;
-          const isCritical = currentCount < minRequired;
-          
-          // Obtener nombres de empleados para mostrar
-          const employeesWithNames = await Promise.all(availableIds.map(async (id) => {
-            const emp = await prisma.employees.findUnique({
-              where: { id }
-            });
-            let name = null;
-            if (emp) {
-              const user = await prisma.users.findUnique({
-                where: { id: emp.user_id },
-                select: { full_name: true }
-              });
-              name = user?.full_name;
-            }
-            return { id: emp?.id, name };
-          }));
-          
-          coverageResults.push({
-            date: dateStr,
-            shiftId: shift.id,
-            shiftName: shift.name,
-            currentCount,
-            requiredMin: minRequired,
-            isCritical,
-            employees: employeesWithNames,
-            isGuard: shift.is_guard
-          });
-          
-          if (isCritical && (!employeeId || (employeeId && !vacationIds.includes(parseInt(employeeId))))) {
-            warnings.push({
-              date: dateStr,
-              shift: shift.name,
-              current: currentCount,
-              required: minRequired,
-              message: `${shift.name} on ${dateStr}: ${currentCount}/${minRequired} employees (minimum not met)`
-            });
-          }
-        }
-      }
-      
-      res.json({
-        success: true,
-        data: {
-          coverage: coverageResults,
-          warnings,
-          hasWarnings: warnings.length > 0
-        }
-      });
-    } catch (error: any) {
-      console.error('Error checking coverage:', error);
-      res.status(500).json({ success: false, message: error.message });
-    }
-  },
-  
+  // Obtener cobertura por rango de fechas
   getCoverage: async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = req.query;
       
+      if (!startDate || !endDate) {
+        return res.status(400).json({ success: false, message: 'startDate and endDate are required' });
+      }
+      
       const start = new Date(startDate as string);
       const end = new Date(endDate as string);
       
+      // Obtener todos los turnos
       const shifts = await prisma.shifts.findMany();
-      const configs = await prisma.pharmacy_configs.findMany();
       
-      const coverageData = [];
+      // Obtener todas las asignaciones de turno
+      const assignments = await prisma.shift_assignments.findMany({
+        where: {
+          date: {
+            gte: start,
+            lte: end
+          }
+        }
+      });
       
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const day = new Date(d);
-        const dateStr = day.toISOString().split('T')[0];
-        const weekNumber = getWeekNumber(day);
-        const year = day.getFullYear();
+      // Obtener solicitudes aprobadas
+      const approvedRequests = await prisma.time_off_requests.findMany({
+        where: {
+          status: 'approved',
+          start_date: { lte: end },
+          end_date: { gte: start }
+        }
+      });
+      
+      // Obtener guardias programadas
+      const guardPeriods = await prisma.guard_schedules.findMany({
+        where: {
+          OR: [
+            { start_date: { lte: end, gte: start } },
+            { end_date: { lte: end, gte: start } },
+            { start_date: { lte: start }, end_date: { gte: end } }
+          ]
+        }
+      });
+      
+      // Calcular cobertura por día
+      const coverage: any[] = [];
+      const currentDate = new Date(start);
+      
+      while (currentDate <= end) {
+        const dateStr = currentDate.toISOString().split('T')[0];
         
         for (const shift of shifts) {
-          // Para turnos de guardia, verificar si están en el horario configurado
+          // Verificar si es guardia y está programada
           if (shift.is_guard) {
-            const guardSchedule = await prisma.guard_schedules.findFirst({
-              where: {
-                shift_id: shift.id,
-                week_number: weekNumber,
-                year: year
-              }
-            });
-            
-            // Si es guardia y no está en el horario, saltar este turno
-            if (!guardSchedule) {
-              continue;
-            }
+            const isGuardActive = guardPeriods.some(period => 
+              period.start_date <= currentDate && period.end_date >= currentDate && period.shift_id === shift.id
+            );
+            if (!isGuardActive) continue;
           }
           
-          const assignments = await prisma.shift_assignments.findMany({
-            where: {
-              shift_id: shift.id,
-              date: day
-            }
-          });
+          // Empleados asignados a este turno en esta fecha
+          const assignedEmployees = assignments.filter(a => 
+            a.shift_id === shift.id && a.date.toISOString().split('T')[0] === dateStr
+          ).map(a => a.employee_id);
           
-          const approvedRequests = await prisma.time_off_requests.findMany({
-            where: {
-              status: 'approved',
-              start_date: { lte: day },
-              end_date: { gte: day }
-            }
-          });
+          // Empleados de vacaciones en esta fecha
+          const vacationEmployees = approvedRequests.filter(r => 
+            r.start_date <= currentDate && r.end_date >= currentDate
+          ).map(r => r.employee_id);
           
-          const assignedIds = assignments.map(a => a.employee_id);
-          const vacationIds = approvedRequests.map(r => r.employee_id);
-          const availableIds = assignedIds.filter(id => !vacationIds.includes(id));
+          // Empleados disponibles
+          const availableCount = assignedEmployees.filter(id => !vacationEmployees.includes(id)).length;
           
-          let minRequired = shift.min_employees_required;
-          const override = await prisma.pharmacy_config_overrides.findFirst({
-            where: {
-              shift_id: shift.id,
-              date: day
-            }
-          });
-          if (override) {
-            minRequired = override.min_employees_required;
-          } else {
-            const config = configs.find(c => c.shift_id === shift.id);
-            if (config) minRequired = config.min_employees_required;
-          }
-          
-          // Obtener nombres de empleados
-          const employeesWithNames = await Promise.all(availableIds.map(async (id) => {
-            const emp = await prisma.employees.findUnique({
-              where: { id }
-            });
-            let name = null;
-            if (emp) {
-              const user = await prisma.users.findUnique({
-                where: { id: emp.user_id },
-                select: { full_name: true }
-              });
-              name = user?.full_name;
-            }
-            return { id: emp?.id, name };
-          }));
-          
-          coverageData.push({
+          coverage.push({
             date: dateStr,
             shiftId: shift.id,
             shiftName: shift.name,
-            currentCount: availableIds.length,
-            requiredMin: minRequired,
-            employees: employeesWithNames,
-            isGuard: shift.is_guard,
-            weekNumber: shift.is_guard ? weekNumber : undefined
+            currentCount: availableCount,
+            requiredMin: shift.min_employees_required,
+            employees: []
           });
         }
+        
+        currentDate.setDate(currentDate.getDate() + 1);
       }
       
-      res.json({ success: true, data: coverageData });
+      res.json({ success: true, data: coverage });
     } catch (error: any) {
       console.error('Error getting coverage:', error);
       res.status(500).json({ success: false, message: error.message });

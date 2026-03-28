@@ -696,15 +696,12 @@ model holidays {
 // ====================== MODELO GUARD_SCHEDULES ======================
 
 model guard_schedules {
-  id          Int      @id @default(autoincrement())
-  shift_id    Int
-  week_number Int
-  year        Int
-  created_at  DateTime @default(now())
-  updated_at  DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  shift_id   Int
+  start_date DateTime
+  end_date   DateTime
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
   
-  shift shifts @relation(fields: [shift_id], references: [id])
-  
-  @@unique([shift_id, week_number, year])
-  @@map("guard_schedules")
+  shift shifts @relation(fields: [shift_id], references: [id], onDelete: Cascade)
 }
