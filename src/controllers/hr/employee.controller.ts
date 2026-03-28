@@ -209,7 +209,7 @@ export const employeeController = {
           });
           employeeWithName = { ...employee, user: { full_name: user?.full_name } };
         }
-        return { ...a, employee };
+        return { ...a, employee: employeeWithName };
       }));
       
       res.json({ success: true, data: assignmentsWithEmployees });
@@ -261,6 +261,50 @@ export const employeeController = {
       res.status(201).json({ success: true, data: assignment });
     } catch (error: any) {
       console.error('Error assigning shift:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+  
+  // ✅ NUEVO MÉTODO: Eliminar asignación de turno específica
+  removeShiftAssignment: async (req: Request, res: Response) => {
+    try {
+      const { employeeId, shiftId, date } = req.body;
+      
+      // Validar campos requeridos
+      if (!employeeId || !shiftId || !date) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Faltan campos requeridos: employeeId, shiftId, date' 
+        });
+      }
+      
+      // Buscar la asignación específica
+      const assignment = await prisma.shift_assignments.findFirst({
+        where: {
+          employee_id: employeeId,
+          shift_id: shiftId,
+          date: new Date(date)
+        }
+      });
+      
+      if (!assignment) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Asignación no encontrada para el empleado, turno y fecha especificados' 
+        });
+      }
+      
+      // Eliminar la asignación
+      await prisma.shift_assignments.delete({
+        where: { id: assignment.id }
+      });
+      
+      res.json({ 
+        success: true, 
+        message: 'Empleado eliminado del turno correctamente' 
+      });
+    } catch (error: any) {
+      console.error('Error removing shift assignment:', error);
       res.status(500).json({ success: false, message: error.message });
     }
   }
