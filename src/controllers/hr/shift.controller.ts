@@ -94,5 +94,31 @@ export const shiftController = {
       console.error('Error deleting shift:', error);
       res.status(500).json({ success: false, message: error.message });
     }
+  },
+
+    async updateConfig(req: Request, res: Response) {
+    try {
+      const { shiftId, minEmployeesRequired } = req.body;
+      
+      const config = await prisma.pharmacy_configs.upsert({
+        where: { shift_id: shiftId },
+        update: { min_employees_required: minEmployeesRequired },
+        create: {
+          shift_id: shiftId,
+          min_employees_required: minEmployeesRequired
+        }
+      });
+      
+      // También actualizar el turno directamente
+      await prisma.shifts.update({
+        where: { id: shiftId },
+        data: { min_employees_required: minEmployeesRequired }
+      });
+      
+      res.json({ success: true, data: config });
+    } catch (error: any) {
+      console.error('Error updating shift config:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
   }
 };

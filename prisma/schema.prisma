@@ -616,7 +616,6 @@ model shift_assignments {
   employee employees @relation(fields: [employee_id], references: [id])
   shift    shifts    @relation(fields: [shift_id], references: [id])
   
-  @@unique([employee_id, date])
 }
 
 model time_off_requests {
