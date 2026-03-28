@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import { prisma } from '../../server';
 
 export const coverageController = {
-  // Obtener cobertura por rango de fechas
   getCoverage: async (req: Request, res: Response) => {
     try {
       const { startDate, endDate } = req.query;
@@ -14,10 +13,8 @@ export const coverageController = {
       const start = new Date(startDate as string);
       const end = new Date(endDate as string);
       
-      // Obtener todos los turnos
       const shifts = await prisma.shifts.findMany();
       
-      // Obtener todas las asignaciones de turno
       const assignments = await prisma.shift_assignments.findMany({
         where: {
           date: {
@@ -27,7 +24,36 @@ export const coverageController = {
         }
       });
       
-      // Obtener solicitudes aprobadas
+      // Obtener todos los empleados involucrados en las asignaciones
+      const employeeIds = [...new Set(assignments.map(a => a.employee_id))];
+      
+      // Obtener empleados con sus user_id
+      const employees = await prisma.employees.findMany({
+        where: { id: { in: employeeIds } },
+        select: { id: true, user_id: true }
+      });
+      
+      // Obtener usuarios directamente por user_id
+      const userIds = employees.map(e => e.user_id);
+      const users = await prisma.users.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, full_name: true, email: true }
+      });
+      
+      // Crear mapa de empleados con sus usuarios
+      const userMap = new Map();
+      users.forEach(u => userMap.set(u.id, u));
+      
+      const employeeMap = new Map();
+      employees.forEach(emp => {
+        const user = userMap.get(emp.user_id);
+        employeeMap.set(emp.id, {
+          id: emp.id,
+          name: user?.full_name || `Empleado ${emp.id}`,
+          email: user?.email
+        });
+      });
+      
       const approvedRequests = await prisma.time_off_requests.findMany({
         where: {
           status: 'approved',
@@ -36,7 +62,6 @@ export const coverageController = {
         }
       });
       
-      // Obtener guardias programadas
       const guardPeriods = await prisma.guard_schedules.findMany({
         where: {
           OR: [
@@ -47,7 +72,6 @@ export const coverageController = {
         }
       });
       
-      // Calcular cobertura por día
       const coverage: any[] = [];
       const currentDate = new Date(start);
       
@@ -55,7 +79,6 @@ export const coverageController = {
         const dateStr = currentDate.toISOString().split('T')[0];
         
         for (const shift of shifts) {
-          // Verificar si es guardia y está programada
           if (shift.is_guard) {
             const isGuardActive = guardPeriods.some(period => 
               period.start_date <= currentDate && period.end_date >= currentDate && period.shift_id === shift.id
@@ -64,17 +87,28 @@ export const coverageController = {
           }
           
           // Empleados asignados a este turno en esta fecha
-          const assignedEmployees = assignments.filter(a => 
-            a.shift_id === shift.id && a.date.toISOString().split('T')[0] === dateStr
-          ).map(a => a.employee_id);
+          const assignedEmployeeIds = assignments
+            .filter(a => a.shift_id === shift.id && a.date.toISOString().split('T')[0] === dateStr)
+            .map(a => a.employee_id);
           
           // Empleados de vacaciones en esta fecha
-          const vacationEmployees = approvedRequests.filter(r => 
-            r.start_date <= currentDate && r.end_date >= currentDate
-          ).map(r => r.employee_id);
+          const vacationEmployeeIds = approvedRequests
+            .filter(r => r.start_date <= currentDate && r.end_date >= currentDate)
+            .map(r => r.employee_id);
           
-          // Empleados disponibles
-          const availableCount = assignedEmployees.filter(id => !vacationEmployees.includes(id)).length;
+          // Empleados disponibles (asignados y no de vacaciones)
+          const availableEmployeeIds = assignedEmployeeIds.filter(id => 
+            !vacationEmployeeIds.includes(id)
+          );
+          
+          const availableCount = availableEmployeeIds.length;
+          
+          // Formatear empleados para la respuesta
+          const formattedEmployees = availableEmployeeIds.map(id => ({
+            id,
+            name: employeeMap.get(id)?.name || `Empleado ${id}`,
+            email: employeeMap.get(id)?.email
+          }));
           
           coverage.push({
             date: dateStr,
@@ -82,7 +116,7 @@ export const coverageController = {
             shiftName: shift.name,
             currentCount: availableCount,
             requiredMin: shift.min_employees_required,
-            employees: []
+            employees: formattedEmployees
           });
         }
         
