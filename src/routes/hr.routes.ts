@@ -44,4 +44,11 @@ router.get('/time-off-requests/balance', timeOffController.getBalance);
 router.post('/coverage/check', coverageController.checkCoverage);
 router.get('/coverage', coverageController.getCoverage);
 
+// ==================== GUARDIAS ====================
+import { guardController } from '../controllers/hr/guard.controller';
+
+router.get('/guard-schedules', guardController.getSchedules);
+router.put('/guard-schedules', requireRole(['admin']), 
+guardController.updateSchedule);
+
 export default router;

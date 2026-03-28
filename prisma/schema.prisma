@@ -115,7 +115,7 @@ model products {
 }
 
 model suppliers {
-  id                  String               @id @default(dbgenerated("(gen_random_uuid())::character varying")) @db.VarChar(255)
+  id                  String               @id @default(cuid()) @db.VarChar(255)
   company_name        String               @db.VarChar(255)
   email               String?              @map("email") @db.VarChar(255)
   website             String?              @db.VarChar(255)
@@ -227,7 +227,7 @@ model client_debt {
   client_id         Int       @map("client_id")
   total_debt        Decimal   @default(0) @map("total_debt") @db.Decimal(10, 2)
   paid_amount       Decimal   @default(0) @map("paid_amount") @db.Decimal(10, 2)
-  pending_amount    Decimal?  @default(dbgenerated("(total_debt - paid_amount)")) @map("pending_amount") @db.Decimal(10, 2)
+  pending_amount    Decimal?  @default(0) @map("pending_amount") @db.Decimal(10, 2)
   last_payment_date DateTime? @map("last_payment_date") @db.Timestamp(6)
   status            String?   @default("pending") @map("status") @db.VarChar(20)
   notes             String?   @map("notes")
@@ -490,7 +490,7 @@ model loyalty_config {
 }
 
 model credit_notes {
-  id               String    @id @default(dbgenerated("(gen_random_uuid())::character varying")) @db.VarChar(255)
+  id               String    @id @default(cuid()) @db.VarChar(255)
   supplier_id      String    @db.VarChar(255)
   reference        String    @unique @db.VarChar(50)
   issue_date       DateTime  @db.Date
@@ -510,7 +510,7 @@ model credit_notes {
 }
 
 model product_purchases {
-  id               String    @id @default(dbgenerated("(gen_random_uuid())::character varying")) @db.VarChar(255)
+  id               String    @id @default(cuid()) @db.VarChar(255)
   supplier_id      String    @db.VarChar(255)
   product_id       Int
   purchase_date    DateTime  @db.Date
@@ -530,7 +530,7 @@ model product_purchases {
 }
 
 model supplier_addresses {
-  id            String    @id @default(dbgenerated("(gen_random_uuid())::character varying")) @db.VarChar(255)
+  id            String    @id @default(cuid()) @db.VarChar(255)
   supplier_id   String    @db.VarChar(255)
   street_number String?   @db.VarChar(20)
   street_name   String    @db.VarChar(255)
@@ -547,7 +547,7 @@ model supplier_addresses {
 }
 
 model supplier_phones {
-  id          String    @id @default(dbgenerated("(gen_random_uuid())::character varying")) @db.VarChar(255)
+  id          String    @id @default(cuid()) @db.VarChar(255)
   supplier_id String    @db.VarChar(255)
   number      String    @db.VarChar(50)
   type        String    @db.VarChar(20)
@@ -581,6 +581,9 @@ model shifts {
   // RELACIONES INVERSAS
   from_shift_swaps shift_swap_requests[] @relation("from_shift")
   to_shift_swaps   shift_swap_requests[] @relation("to_shift")
+  
+  // ✅ NUEVA RELACIÓN PARA GUARD_SCHEDULES
+  guard_schedules guard_schedules[]
 }
 
 model employees {
@@ -688,4 +691,20 @@ model holidays {
   is_recurring Boolean @default(false)
   created_at DateTime @default(now())
   updated_at DateTime @default(now())
+}
+
+// ====================== MODELO GUARD_SCHEDULES ======================
+
+model guard_schedules {
+  id          Int      @id @default(autoincrement())
+  shift_id    Int
+  week_number Int
+  year        Int
+  created_at  DateTime @default(now())
+  updated_at  DateTime @default(now())
+  
+  shift shifts @relation(fields: [shift_id], references: [id])
+  
+  @@unique([shift_id, week_number, year])
+  @@map("guard_schedules")
 }

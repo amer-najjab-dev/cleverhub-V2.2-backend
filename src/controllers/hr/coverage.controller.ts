@@ -1,6 +1,15 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../server';
 
+// Función para obtener la semana del año (ISO week)
+function getWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
 export const coverageController = {
   checkCoverage: async (req: Request, res: Response) => {
     try {
@@ -22,8 +31,26 @@ export const coverageController = {
       
       for (const day of days) {
         const dateStr = day.toISOString().split('T')[0];
+        const weekNumber = getWeekNumber(day);
+        const year = day.getFullYear();
         
         for (const shift of shifts) {
+          // Para turnos de guardia, verificar si están en el horario configurado
+          if (shift.is_guard) {
+            const guardSchedule = await prisma.guard_schedules.findFirst({
+              where: {
+                shift_id: shift.id,
+                week_number: weekNumber,
+                year: year
+              }
+            });
+            
+            // Si es guardia y no está en el horario, saltar este turno
+            if (!guardSchedule) {
+              continue;
+            }
+          }
+          
           const assignments = await prisma.shift_assignments.findMany({
             where: {
               shift_id: shift.id,
@@ -83,7 +110,8 @@ export const coverageController = {
             currentCount,
             requiredMin: minRequired,
             isCritical,
-            employees: employeesWithNames
+            employees: employeesWithNames,
+            isGuard: shift.is_guard
           });
           
           if (isCritical && (!employeeId || (employeeId && !vacationIds.includes(parseInt(employeeId))))) {
@@ -127,8 +155,26 @@ export const coverageController = {
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const day = new Date(d);
         const dateStr = day.toISOString().split('T')[0];
+        const weekNumber = getWeekNumber(day);
+        const year = day.getFullYear();
         
         for (const shift of shifts) {
+          // Para turnos de guardia, verificar si están en el horario configurado
+          if (shift.is_guard) {
+            const guardSchedule = await prisma.guard_schedules.findFirst({
+              where: {
+                shift_id: shift.id,
+                week_number: weekNumber,
+                year: year
+              }
+            });
+            
+            // Si es guardia y no está en el horario, saltar este turno
+            if (!guardSchedule) {
+              continue;
+            }
+          }
+          
           const assignments = await prisma.shift_assignments.findMany({
             where: {
               shift_id: shift.id,
@@ -184,7 +230,9 @@ export const coverageController = {
             shiftName: shift.name,
             currentCount: availableIds.length,
             requiredMin: minRequired,
-            employees: employeesWithNames
+            employees: employeesWithNames,
+            isGuard: shift.is_guard,
+            weekNumber: shift.is_guard ? weekNumber : undefined
           });
         }
       }
