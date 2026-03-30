@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "prisma generate && tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "db:seed": "prisma db seed",
+    "db:reset": "prisma migrate reset --force"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.12",
@@ -33,7 +38,7 @@
   },
   "devDependencies": {
     "@prisma/client": "^7.5.0",
-    "@types/bcrypt": "^5.0.0",
+    "@types/bcrypt": "^5.0.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/cors": "^2.8.13",
@@ -41,7 +46,7 @@
     "@types/express-session": "^1.17.7",
     "@types/file-saver": "^2.0.7",
     "@types/jsonwebtoken": "^9.0.10",
-    "@types/node": "^25.4.0",
+    "@types/node": "^25.5.0",
     "@types/pg": "^8.10.2",
     "@types/twilio": "^3.19.2",
     "dotenv": "^17.3.1",

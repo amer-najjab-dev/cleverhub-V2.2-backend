@@ -2,8 +2,18 @@ import { Request, Response } from 'express';
 import { prisma } from '../server';
 import { CreateSaleDTO } from '../dtos/sale.dto';
 
+// Extender el tipo Request para incluir el usuario autenticado
+interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    email: string;
+    role: string;
+    pharmacyId: number;
+  };
+}
+
 export class VentaController {
-  async crear(req: Request, res: Response) {
+  async crear(req: AuthRequest, res: Response) {
     console.log('Payload recibido:', JSON.stringify(req.body, null, 2));
     try {
       const { 
@@ -18,8 +28,50 @@ export class VentaController {
         discountAmount: discountAmountBody
       } = req.body;
       
+      // Obtener pharmacyId del usuario autenticado
+      const pharmacyId = req.user?.pharmacyId;
+      
+      if (!pharmacyId) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Usuario sin farmacia asignada' 
+        });
+      }
+      
       if (!userId || !items || !items.length) {
         return res.status(400).json({ error: 'Faltan datos: userId, items' });
+      }
+
+      // Verificar que el usuario pertenece a la farmacia
+      const user = await prisma.users.findFirst({
+        where: {
+          id: userId,
+          pharmacy_id: pharmacyId
+        }
+      });
+      
+      if (!user) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Usuario no pertenece a esta farmacia' 
+        });
+      }
+
+      // Si hay cliente, verificar que pertenece a la farmacia
+      if (clientId) {
+        const client = await prisma.clients.findFirst({
+          where: {
+            id: clientId,
+            pharmacy_id: pharmacyId
+          }
+        });
+        
+        if (!client) {
+          return res.status(403).json({ 
+            success: false, 
+            message: 'Cliente no pertenece a esta farmacia' 
+          });
+        }
       }
 
       // Calcular subtotal basado en los items
@@ -33,6 +85,18 @@ export class VentaController {
         const itemTotal = pricePPV * item.quantity;
         calculatedSubtotal += itemTotal;
 
+        // Verificar que el producto existe (opcional, ya que products es global)
+        const product = await prisma.products.findUnique({
+          where: { id: item.productId }
+        });
+        
+        if (!product) {
+          return res.status(400).json({ 
+            success: false, 
+            message: `Producto con ID ${item.productId} no encontrado` 
+          });
+        }
+
         itemsWithPrices.push({
           product_id: item.productId,
           quantity: item.quantity,
@@ -40,7 +104,8 @@ export class VentaController {
           unit_price_pph: pricePPH,
           subtotal: itemTotal,
           total: itemTotal,
-          margin: (pricePPV - pricePPH) * item.quantity
+          margin: (pricePPV - pricePPH) * item.quantity,
+          margin_percentage: pricePPV > 0 ? ((pricePPV - pricePPH) / pricePPV) * 100 : 0
         });
       }
 
@@ -81,7 +146,7 @@ export class VentaController {
           
           if (isCredit) {
             // Es crédito - no va a payments, va a client_debts
-             console.log('💳 Es crédito, creando deuda por:', amount);
+            console.log('💳 Es crédito, creando deuda por:', amount);
             hasCredit = true;
             debtsToCreate.push({
               client_id: clientId,
@@ -118,9 +183,6 @@ export class VentaController {
         }
       }
 
-      // ... después de procesar descuentos y pagos ...
-
-      // Determinar estado de pago
       // Determinar estado de pago
       let paymentStatus = 'pending';
       if (totalPaid >= finalTotal) {
@@ -138,6 +200,7 @@ export class VentaController {
       // Crear venta con Prisma (SOLO UNA VEZ)
       const venta = await prisma.sales.create({
         data: {
+          pharmacy_id: pharmacyId,  // ← AÑADIR pharmacyId
           sale_number: saleNumber,
           user_id: userId,
           client_id: clientId,
@@ -169,20 +232,59 @@ export class VentaController {
       });
 
       // Crear o actualizar deudas en client_debts
-        if (debtsToCreate.length > 0) {
-          for (const debt of debtsToCreate) {
-            // Siempre crear una nueva deuda, no consolidar
-            await prisma.client_debt.create({
+      if (debtsToCreate.length > 0) {
+        for (const debt of debtsToCreate) {
+          // Siempre crear una nueva deuda, no consolidar
+          await prisma.client_debt.create({
+            data: {
+              client_id: debt.client_id,
+              total_debt: debt.total_debt,
+              paid_amount: 0,
+              status: 'pending',
+              notes: debt.notes
+            }
+          });
+        }
+      }
+
+      // Actualizar puntos de lealtad si corresponde
+      if (clientId && finalTotal > 0) {
+        // Obtener configuración de lealtad de la farmacia
+        const loyaltyConfig = await prisma.loyalty_config.findUnique({
+          where: { pharmacy_id: pharmacyId }
+        });
+        
+        if (loyaltyConfig && loyaltyConfig.points_per_unit > 0) {
+          const pointsEarned = Math.floor(finalTotal / loyaltyConfig.currency_unit) * loyaltyConfig.points_per_unit;
+          
+          if (pointsEarned > 0) {
+            await prisma.loyalty_transactions.create({
               data: {
-                client_id: debt.client_id,
-                total_debt: debt.total_debt,
-                paid_amount: 0,
-                status: 'pending',
-                notes: debt.notes
+                client_id: clientId,
+                points: pointsEarned,
+                type: 'earn',
+                reason: `Compra: ${saleNumber}`,
+                sale_id: venta.id,
+                product_value: finalTotal
+              }
+            });
+            
+            // Actualizar puntos del cliente
+            await prisma.clients.update({
+              where: { id: clientId },
+              data: {
+                loyalty_points: {
+                  increment: pointsEarned
+                },
+                total_purchases: {
+                  increment: finalTotal
+                },
+                last_purchase_date: new Date()
               }
             });
           }
         }
+      }
 
       res.status(201).json({
         success: true,
@@ -196,12 +298,23 @@ export class VentaController {
     }
   }
 
-  async obtenerPorId(req: Request, res: Response) {
+  async obtenerPorId(req: AuthRequest, res: Response) {
     try {
       const id = parseInt(req.params.id);
+      const pharmacyId = req.user?.pharmacyId;
       
-      const venta = await prisma.sales.findUnique({
-        where: { id },
+      if (!pharmacyId) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Usuario sin farmacia asignada' 
+        });
+      }
+      
+      const venta = await prisma.sales.findFirst({
+        where: { 
+          id,
+          pharmacy_id: pharmacyId  // ← FILTRAR POR FARMACIA
+        },
         include: {
           sale_items: {
             include: {
@@ -228,8 +341,17 @@ export class VentaController {
     }
   }
 
-  async listar(req: Request, res: Response) {
+  async listar(req: AuthRequest, res: Response) {
     try {
+      const pharmacyId = req.user?.pharmacyId;
+      
+      if (!pharmacyId) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Usuario sin farmacia asignada' 
+        });
+      }
+      
       const {
         startDate,
         endDate,
@@ -242,7 +364,9 @@ export class VentaController {
         offset = 0
       } = req.query;
 
-      const where: any = {};
+      const where: any = {
+        pharmacy_id: pharmacyId  // ← FILTRAR POR FARMACIA
+      };
 
       if (startDate && endDate) {
         where.created_at = {

@@ -1,8 +1,9 @@
 import { Router } from 'express';
-import { campaignController } from '../controllers/campaign.controller';
+import { CampaignController } from '../controllers/campaign.controller';
 import { requireAuth } from '../middleware/auth';
 
 const router = Router();
+const campaignController = new CampaignController();
 
 router.use(requireAuth);
 

@@ -2,6 +2,16 @@ import { Request, Response } from 'express';
 import { prisma } from '../../server';
 import bcrypt from 'bcrypt';
 
+// Extender el tipo Request para incluir el usuario autenticado
+interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    email: string;
+    role: string;
+    pharmacyId: number;
+  };
+}
+
 export const employeeController = {
   getAll: async (req: Request, res: Response) => {
     try {
@@ -67,9 +77,17 @@ export const employeeController = {
     }
   },
   
-  create: async (req: Request, res: Response) => {
+  create: async (req: AuthRequest, res: Response) => {
     try {
-      const { email, fullName, phone, dni, password, defaultShiftId, vacationDays } = req.body;
+      const { email, fullName, defaultShiftId, vacationDays, password } = req.body;
+      const pharmacyId = req.user?.pharmacyId;  // ← AÑADE ESTA LÍNEA
+      
+      if (!pharmacyId) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Usuario sin farmacia asignada' 
+        });
+      }
       
       const existingUser = await prisma.users.findUnique({
         where: { email }
@@ -86,12 +104,14 @@ export const employeeController = {
           full_name: fullName,
           password: hashedPassword,
           role: 'employee',
-          is_active: true
+          is_active: true,
+          pharmacy_id: pharmacyId  // ← AÑADE ESTA LÍNEA - Asignar usuario a la farmacia
         }
       });
       
       const employee = await prisma.employees.create({
         data: {
+          pharmacy_id: pharmacyId,  // ← AÑADE ESTA LÍNEA - Asignar empleado a la farmacia
           user_id: user.id,
           default_shift_id: defaultShiftId || null,
           vacation_days: vacationDays || 25,
@@ -99,10 +119,16 @@ export const employeeController = {
         }
       });
       
+      // Obtener el usuario completo para la respuesta
+      const userData = await prisma.users.findUnique({
+        where: { id: user.id },
+        select: { id: true, email: true, full_name: true, role: true, is_active: true }
+      });
+      
       res.status(201).json({
         success: true,
         message: 'Employee created successfully',
-        data: { ...employee, user }
+        data: { ...employee, user: userData }
       });
     } catch (error: any) {
       console.error('Error creating employee:', error);
@@ -173,11 +199,21 @@ export const employeeController = {
     }
   },
   
-  getAssignments: async (req: Request, res: Response) => {
+  getAssignments: async (req: AuthRequest, res: Response) => {
     try {
       const { startDate, endDate, employeeId } = req.query;
+      const pharmacyId = req.user?.pharmacyId;
       
-      const where: any = {};
+      if (!pharmacyId) {
+        return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+      }
+      
+      const where: any = {
+        employee: {
+          pharmacy_id: pharmacyId  // ← FILTRAR POR FARMACIA
+        }
+      };
+      
       if (startDate && endDate) {
         where.date = {
           gte: new Date(startDate as string),
@@ -191,25 +227,25 @@ export const employeeController = {
       const assignments = await prisma.shift_assignments.findMany({
         where,
         include: {
-          shift: true
+          shift: true,
+          employee: {
+            include: {
+              user: {
+                select: { full_name: true }
+              }
+            }
+          }
         },
         orderBy: { date: 'asc' }
       });
       
-      // Obtener empleados con sus usuarios
-      const assignmentsWithEmployees = await Promise.all(assignments.map(async (a) => {
-        const employee = await prisma.employees.findUnique({
-          where: { id: a.employee_id }
-        });
-        let employeeWithName = null;
-        if (employee) {
-          const user = await prisma.users.findUnique({
-            where: { id: employee.user_id },
-            select: { full_name: true }
-          });
-          employeeWithName = { ...employee, user: { full_name: user?.full_name } };
+      // Transformar los datos para mantener la estructura esperada por el frontend
+      const assignmentsWithEmployees = assignments.map((a) => ({
+        ...a,
+        employee: {
+          ...a.employee,
+          user: a.employee.user
         }
-        return { ...a, employee: employeeWithName };
       }));
       
       res.json({ success: true, data: assignmentsWithEmployees });
@@ -219,12 +255,41 @@ export const employeeController = {
     }
   },
   
-  assignShift: async (req: Request, res: Response) => {
+  assignShift: async (req: AuthRequest, res: Response) => {
     try {
       const { employeeId, shiftId, date } = req.body;
+      const pharmacyId = req.user?.pharmacyId;
+      
+      if (!pharmacyId) {
+        return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+      }
       
       if (!employeeId || !shiftId) {
         return res.status(400).json({ success: false, message: 'Missing required fields' });
+      }
+      
+      // Verificar que el empleado pertenece a la farmacia
+      const employee = await prisma.employees.findFirst({
+        where: {
+          id: employeeId,
+          pharmacy_id: pharmacyId
+        }
+      });
+      
+      if (!employee) {
+        return res.status(404).json({ success: false, message: 'Employee not found in this pharmacy' });
+      }
+      
+      // Verificar que el turno pertenece a la farmacia
+      const shift = await prisma.shifts.findFirst({
+        where: {
+          id: shiftId,
+          pharmacy_id: pharmacyId
+        }
+      });
+      
+      if (!shift) {
+        return res.status(404).json({ success: false, message: 'Shift not found in this pharmacy' });
       }
       
       const data: any = {
@@ -250,11 +315,11 @@ export const employeeController = {
           return res.json({ success: true, data: assignment });
         }
       } else {
-        const employee = await prisma.employees.update({
+        const updatedEmployee = await prisma.employees.update({
           where: { id: employeeId },
           data: { default_shift_id: shiftId }
         });
-        return res.json({ success: true, data: employee });
+        return res.json({ success: true, data: updatedEmployee });
       }
       
       const assignment = await prisma.shift_assignments.create({ data });
@@ -265,16 +330,53 @@ export const employeeController = {
     }
   },
   
-  // ✅ NUEVO MÉTODO: Eliminar asignación de turno específica
-  removeShiftAssignment: async (req: Request, res: Response) => {
+  removeShiftAssignment: async (req: AuthRequest, res: Response) => {
     try {
       const { employeeId, shiftId, date } = req.body;
+      const pharmacyId = req.user?.pharmacyId;
+      
+      if (!pharmacyId) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Usuario sin farmacia asignada' 
+        });
+      }
       
       // Validar campos requeridos
       if (!employeeId || !shiftId || !date) {
         return res.status(400).json({ 
           success: false, 
           message: 'Faltan campos requeridos: employeeId, shiftId, date' 
+        });
+      }
+      
+      // Verificar que el empleado pertenece a la farmacia
+      const employee = await prisma.employees.findFirst({
+        where: {
+          id: employeeId,
+          pharmacy_id: pharmacyId
+        }
+      });
+      
+      if (!employee) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Empleado no encontrado en esta farmacia' 
+        });
+      }
+      
+      // Verificar que el turno pertenece a la farmacia
+      const shift = await prisma.shifts.findFirst({
+        where: {
+          id: shiftId,
+          pharmacy_id: pharmacyId
+        }
+      });
+      
+      if (!shift) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Turno no encontrado en esta farmacia' 
         });
       }
       
