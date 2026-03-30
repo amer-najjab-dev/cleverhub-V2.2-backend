@@ -1,6 +1,7 @@
 // src/controllers/dashboard.controller.ts
 import { Request, Response } from 'express';
 import { prisma } from '../server';
+import { Prisma } from '@prisma/client';
 
 // Extender el tipo Request para incluir el usuario autenticado y pharmacyFilter
 interface AuthRequest extends Request {
@@ -309,21 +310,24 @@ export class DashboardController {
       const nextDay = new Date(targetDate);
       nextDay.setDate(nextDay.getDate() + 1);
 
-      const hourlyData = await prisma.$queryRaw`
+      // Construir la consulta correctamente con Prisma raw
+      const query = Prisma.sql`
         SELECT 
           EXTRACT(HOUR FROM created_at) as hour,
           SUM(total) as value
         FROM sales
         WHERE created_at BETWEEN ${targetDate} AND ${nextDay}
           AND sale_status = 'completed'
-          ${pharmacyFilter.pharmacy_id ? `AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : ''}
+          ${pharmacyFilter.pharmacy_id ? Prisma.sql`AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : Prisma.empty}
         GROUP BY EXTRACT(HOUR FROM created_at)
         ORDER BY hour ASC
       `;
 
+      const hourlyData = await prisma.$queryRaw<any[]>(query);
+
       const hours = Array.from({ length: 24 }, (_, i) => i);
       const result = hours.map(hour => {
-        const found = (hourlyData as any[]).find((d: any) => Number(d.hour) === hour);
+        const found = hourlyData.find((d: any) => Number(d.hour) === hour);
         return {
           hour: `${hour}:00`,
           value: found ? Number(found.value) : 0
@@ -355,35 +359,38 @@ export class DashboardController {
       const previousWeekStart = new Date(weekStart);
       previousWeekStart.setDate(weekStart.getDate() - 7);
 
-      const currentWeekSales = await prisma.$queryRaw`
+      const currentWeekQuery = Prisma.sql`
         SELECT 
           EXTRACT(DOW FROM created_at) as dayOfWeek,
           SUM(total) as total
         FROM sales
         WHERE created_at BETWEEN ${weekStart} AND ${now}
           AND sale_status = 'completed'
-          ${pharmacyFilter.pharmacy_id ? `AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : ''}
+          ${pharmacyFilter.pharmacy_id ? Prisma.sql`AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : Prisma.empty}
         GROUP BY EXTRACT(DOW FROM created_at)
       `;
 
-      const previousWeekSales = await prisma.$queryRaw`
+      const previousWeekQuery = Prisma.sql`
         SELECT 
           EXTRACT(DOW FROM created_at) as dayOfWeek,
           SUM(total) as total
         FROM sales
         WHERE created_at BETWEEN ${previousWeekStart} AND ${weekStart}
           AND sale_status = 'completed'
-          ${pharmacyFilter.pharmacy_id ? `AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : ''}
+          ${pharmacyFilter.pharmacy_id ? Prisma.sql`AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : Prisma.empty}
         GROUP BY EXTRACT(DOW FROM created_at)
       `;
+
+      const currentWeekSales = await prisma.$queryRaw<any[]>(currentWeekQuery);
+      const previousWeekSales = await prisma.$queryRaw<any[]>(previousWeekQuery);
 
       const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
       
       const result = [];
       for (let i = 1; i <= 7; i++) {
         const dayIndex = i % 7;
-        const currentDay = (currentWeekSales as any[]).find((d: any) => Number(d.dayofweek) === dayIndex);
-        const previousDay = (previousWeekSales as any[]).find((d: any) => Number(d.dayofweek) === dayIndex);
+        const currentDay = currentWeekSales.find((d: any) => Number(d.dayofweek) === dayIndex);
+        const previousDay = previousWeekSales.find((d: any) => Number(d.dayofweek) === dayIndex);
         
         result.push({
           day: dayNames[dayIndex],
@@ -597,20 +604,22 @@ export class DashboardController {
       const startOfDay = new Date(now.setHours(0, 0, 0, 0));
       
       // Mejor hora del día
-      const hourlySales = await prisma.$queryRaw`
+      const bestHourQuery = Prisma.sql`
         SELECT 
           EXTRACT(HOUR FROM created_at) as hour,
           SUM(total) as value
         FROM sales
         WHERE created_at > ${startOfDay}
           AND sale_status = 'completed'
-          ${pharmacyFilter.pharmacy_id ? `AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : ''}
+          ${pharmacyFilter.pharmacy_id ? Prisma.sql`AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : Prisma.empty}
         GROUP BY EXTRACT(HOUR FROM created_at)
         ORDER BY value DESC
         LIMIT 1
       `;
 
-      const bestHourData = (hourlySales as any[])[0];
+      const hourlySales = await prisma.$queryRaw<any[]>(bestHourQuery);
+
+      const bestHourData = hourlySales[0];
       const bestHour = bestHourData
         ? { hour: `${Number(bestHourData.hour)}:00`, value: Number(bestHourData.value) }
         : { hour: '12:00', value: 0 };
