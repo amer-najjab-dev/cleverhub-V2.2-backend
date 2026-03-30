@@ -9,7 +9,10 @@ class ProductController {
             const skip = (Number(page) - 1) * Number(limit);
             const where = { active: true };
             if (q) {
-                where.name = { contains: q, mode: 'insensitive' };
+                where.OR = [
+                    { name: { contains: q, mode: 'insensitive' } },
+                    { barcode: { contains: q, mode: 'insensitive' } }
+                ];
             }
             if (category) {
                 where.category = category;

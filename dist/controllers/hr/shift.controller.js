@@ -1,0 +1,113 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.shiftController = void 0;
+const server_1 = require("../../server");
+exports.shiftController = {
+    getAll: async (req, res) => {
+        try {
+            const shifts = await server_1.prisma.shifts.findMany({
+                orderBy: { id: 'asc' }
+            });
+            res.json({ success: true, data: shifts });
+        }
+        catch (error) {
+            console.error('Error getting shifts:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+    create: async (req, res) => {
+        try {
+            const { name, startTime, endTime, isGuard, minEmployeesRequired } = req.body;
+            const shift = await server_1.prisma.shifts.create({
+                data: {
+                    name,
+                    start_time: startTime,
+                    end_time: endTime,
+                    is_guard: isGuard || false,
+                    min_employees_required: minEmployeesRequired || 1
+                }
+            });
+            await server_1.prisma.pharmacy_configs.create({
+                data: {
+                    shift_id: shift.id,
+                    min_employees_required: minEmployeesRequired || 1
+                }
+            });
+            res.status(201).json({ success: true, data: shift });
+        }
+        catch (error) {
+            console.error('Error creating shift:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+    update: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const { name, startTime, endTime, isGuard, minEmployeesRequired } = req.body;
+            const shift = await server_1.prisma.shifts.update({
+                where: { id: parseInt(id) },
+                data: {
+                    name,
+                    start_time: startTime,
+                    end_time: endTime,
+                    is_guard: isGuard,
+                    min_employees_required: minEmployeesRequired
+                }
+            });
+            await server_1.prisma.pharmacy_configs.update({
+                where: { shift_id: parseInt(id) },
+                data: { min_employees_required: minEmployeesRequired }
+            });
+            res.json({ success: true, data: shift });
+        }
+        catch (error) {
+            console.error('Error updating shift:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+    delete: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const employeesWithShift = await server_1.prisma.employees.count({
+                where: { default_shift_id: parseInt(id) }
+            });
+            if (employeesWithShift > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot delete shift because employees are assigned to it'
+                });
+            }
+            await server_1.prisma.shifts.delete({
+                where: { id: parseInt(id) }
+            });
+            res.json({ success: true, message: 'Shift deleted successfully' });
+        }
+        catch (error) {
+            console.error('Error deleting shift:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+    async updateConfig(req, res) {
+        try {
+            const { shiftId, minEmployeesRequired } = req.body;
+            const config = await server_1.prisma.pharmacy_configs.upsert({
+                where: { shift_id: shiftId },
+                update: { min_employees_required: minEmployeesRequired },
+                create: {
+                    shift_id: shiftId,
+                    min_employees_required: minEmployeesRequired
+                }
+            });
+            // También actualizar el turno directamente
+            await server_1.prisma.shifts.update({
+                where: { id: shiftId },
+                data: { min_employees_required: minEmployeesRequired }
+            });
+            res.json({ success: true, data: config });
+        }
+        catch (error) {
+            console.error('Error updating shift config:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+};

@@ -181,24 +181,42 @@ class DashboardController {
     async getTopProducts(req, res) {
         try {
             const limit = Number(req.query.limit) || 10;
-            const period = req.query.period || 'week';
-            const now = new Date();
+            const period = req.query.period;
+            const startDateParam = req.query.startDate;
+            const endDateParam = req.query.endDate;
             let startDate;
-            switch (period) {
-                case 'week':
-                    startDate = new Date(now.setDate(now.getDate() - 7));
-                    break;
-                case 'month':
-                    startDate = new Date(now.setMonth(now.getMonth() - 1));
-                    break;
-                default:
-                    startDate = new Date(now.setDate(now.getDate() - 7));
+            let endDate = new Date();
+            // Si se proporcionan fechas personalizadas
+            if (startDateParam && endDateParam) {
+                startDate = new Date(startDateParam);
+                endDate = new Date(endDateParam);
+                endDate.setHours(23, 59, 59, 999); // Final del día
+            }
+            else {
+                // Usar período predefinido
+                const now = new Date();
+                switch (period) {
+                    case 'week':
+                        startDate = new Date(now.setDate(now.getDate() - 7));
+                        break;
+                    case 'month':
+                        startDate = new Date(now.setMonth(now.getMonth() - 1));
+                        break;
+                    case 'quarter':
+                        startDate = new Date(now.setMonth(now.getMonth() - 3));
+                        break;
+                    default:
+                        startDate = new Date(now.setDate(now.getDate() - 7));
+                }
             }
             const topProducts = await server_1.prisma.sale_items.groupBy({
                 by: ['product_id'],
                 where: {
                     sale: {
-                        created_at: { gte: startDate },
+                        created_at: {
+                            gte: startDate,
+                            lte: endDate
+                        },
                         sale_status: 'completed'
                     }
                 },
@@ -217,13 +235,31 @@ class DashboardController {
                 const product = await server_1.prisma.products.findUnique({
                     where: { id: item.product_id }
                 });
+                // Obtener los items de venta para este producto en el período
+                const saleItems = await server_1.prisma.sale_items.findMany({
+                    where: {
+                        product_id: item.product_id,
+                        sale: {
+                            created_at: {
+                                gte: startDate,
+                                lte: endDate
+                            },
+                            sale_status: 'completed'
+                        }
+                    }
+                });
+                // Calcular margen total y porcentaje
+                const totalMargin = saleItems.reduce((sum, si) => sum + Number(si.margin || 0), 0);
+                const totalRevenue = Number(item._sum.total || 0);
+                const marginPercentage = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0;
                 return {
                     id: item.product_id,
                     name: product?.name || 'Unknown',
                     category: product?.category || 'N/A',
-                    sale: item._sum.quantity || 0,
-                    change: Math.floor(Math.random() * 30) - 5,
-                    revenue: item._sum.total || 0
+                    quantity: item._sum.quantity || 0,
+                    revenue: totalRevenue,
+                    margin: totalMargin,
+                    marginPercentage: Number(marginPercentage.toFixed(1))
                 };
             }));
             res.json({

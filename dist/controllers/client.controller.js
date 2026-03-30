@@ -22,12 +22,37 @@ class ClientController {
                     skip,
                     take: Number(limit),
                     orderBy: { created_at: 'desc' },
+                    include: {
+                        sales: {
+                            orderBy: { created_at: 'desc' },
+                            take: 1,
+                            select: {
+                                created_at: true
+                            }
+                        },
+                        client_debts: {
+                            where: {
+                                pending_amount: { gt: 0 }
+                            },
+                            select: {
+                                pending_amount: true
+                            }
+                        }
+                    }
                 }),
                 server_1.prisma.clients.count({ where }),
             ]);
+            // Tipado correcto para el reduce
+            const clientsWithDetails = clients.map((client) => ({
+                ...client,
+                last_purchase_date: client.sales?.[0]?.created_at || null,
+                total_debt: client.client_debts?.reduce((sum, debt) => sum + Number(debt.pending_amount), 0) || 0,
+                sales: undefined,
+                client_debts: undefined
+            }));
             res.json({
                 success: true,
-                data: clients,
+                data: clientsWithDetails,
                 meta: {
                     total,
                     page: Number(page),
@@ -100,6 +125,30 @@ class ClientController {
             res.status(500).json({
                 success: false,
                 message: error.message,
+            });
+        }
+    }
+    async checkCanDelete(req, res) {
+        try {
+            const id = parseInt(req.params.id);
+            // Verificar si el cliente tiene deuda pendiente
+            const activeDebt = await server_1.prisma.client_debt.findFirst({
+                where: {
+                    client_id: id,
+                    pending_amount: { gt: 0 }
+                }
+            });
+            const canDelete = !activeDebt;
+            res.json({
+                success: true,
+                data: { canDelete }
+            });
+        }
+        catch (error) {
+            console.error('Error checking if client can be deleted:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message
             });
         }
     }
@@ -194,16 +243,46 @@ class ClientController {
                 where: { client_id: Number(id) },
                 orderBy: { created_at: 'desc' },
             });
+            if (debts.length === 0) {
+                return res.json({
+                    success: true,
+                    data: []
+                });
+            }
+            // Consolidar todas las deudas en una sola
+            const totalDebt = debts.reduce((sum, d) => sum + Number(d.total_debt), 0);
+            const totalPaid = debts.reduce((sum, d) => sum + Number(d.paid_amount), 0);
+            const totalPending = debts.reduce((sum, d) => sum + Number(d.pending_amount), 0);
+            // Determinar estado consolidado
+            let consolidatedStatus = 'paid';
+            if (totalPending > 0 && totalPaid > 0) {
+                consolidatedStatus = 'partial';
+            }
+            else if (totalPending > 0) {
+                consolidatedStatus = 'pending';
+            }
+            const consolidatedDebt = {
+                id: debts[0].id,
+                client_id: Number(id),
+                total_debt: totalDebt,
+                paid_amount: totalPaid,
+                pending_amount: totalPending,
+                status: consolidatedStatus,
+                last_payment_date: debts[0].last_payment_date,
+                notes: debts.map(d => d.notes).filter(Boolean).join('\n'),
+                created_at: debts[0].created_at,
+                updated_at: debts[0].updated_at
+            };
             res.json({
                 success: true,
-                data: debts,
+                data: consolidatedDebt
             });
         }
         catch (error) {
             console.error('Error getting client debts:', error);
             res.status(500).json({
                 success: false,
-                message: error.message,
+                message: error.message
             });
         }
     }
@@ -407,6 +486,150 @@ class ClientController {
                 success: false,
                 message: error.message
             });
+        }
+    }
+    async registerDebtPayment(req, res) {
+        try {
+            const clientId = parseInt(req.params.clientId);
+            const { amount, notes } = req.body;
+            if (!amount || amount <= 0) {
+                return res.status(400).json({ error: 'Monto inválido' });
+            }
+            let remainingAmount = amount;
+            let updatedDebts = [];
+            // Obtener todas las deudas activas ordenadas por fecha ASC (FIFO)
+            const activeDebts = await server_1.prisma.client_debt.findMany({
+                where: {
+                    client_id: clientId,
+                    pending_amount: { gt: 0 }
+                },
+                orderBy: { created_at: 'asc' },
+                include: {
+                    client: true
+                }
+            });
+            if (activeDebts.length === 0) {
+                return res.status(404).json({ error: 'No hay deudas pendientes' });
+            }
+            // Aplicar el pago a las deudas en orden FIFO
+            for (const debt of activeDebts) {
+                if (remainingAmount <= 0)
+                    break;
+                const currentPending = Number(debt.pending_amount);
+                const currentPaid = Number(debt.paid_amount);
+                const currentTotal = Number(debt.total_debt);
+                // Calcular cuánto aplicar a esta deuda
+                const applyAmount = Math.min(remainingAmount, currentPending);
+                const newPaidAmount = currentPaid + applyAmount;
+                // ACTUALIZAR client_debt
+                await server_1.prisma.client_debt.update({
+                    where: { id: debt.id },
+                    data: {
+                        paid_amount: newPaidAmount,
+                        status: newPaidAmount >= currentTotal ? 'paid' : 'partial',
+                        updated_at: new Date(),
+                        last_payment_date: new Date(),
+                        notes: notes ? `${debt.notes || ''}\n${notes}`.trim() : debt.notes
+                    }
+                });
+                // BUSCAR Y ACTUALIZAR LA VENTA ASOCIADA A ESTA DEUDA
+                // Buscar la venta con crédito pendiente más antigua
+                const venta = await server_1.prisma.sales.findFirst({
+                    where: {
+                        client_id: clientId,
+                        payment_status: { in: ['pending', 'partial'] }, // ← Incluir partial
+                        amount_pending: { gt: 0 }
+                    },
+                    orderBy: { created_at: 'asc' }
+                });
+                if (venta) {
+                    // Limitar el monto a aplicar por el amount_pending de la venta
+                    const ventaPending = Number(venta.amount_pending);
+                    const amountToApply = Math.min(applyAmount, ventaPending);
+                    const newAmountApplied = Number(venta.amount_applied) + amountToApply;
+                    const newAmountPending = ventaPending - amountToApply;
+                    const newPaymentStatus = newAmountPending === 0 ? 'paid' : 'partial';
+                    await server_1.prisma.sales.update({
+                        where: { id: venta.id },
+                        data: {
+                            amount_applied: newAmountApplied,
+                            amount_pending: newAmountPending,
+                            payment_status: newPaymentStatus,
+                            updated_at: new Date()
+                        }
+                    });
+                    // Si el pago no se aplicó completamente a esta venta, continuar con la siguiente
+                    remainingAmount = remainingAmount - amountToApply;
+                }
+                updatedDebts.push({
+                    id: debt.id,
+                    saleId: venta?.id,
+                    appliedAmount: applyAmount,
+                    newPaidAmount,
+                    totalDebt: currentTotal
+                });
+            }
+            res.json({
+                success: true,
+                message: `Pago de ${amount} MAD aplicado correctamente`,
+                data: {
+                    appliedAmount: amount - remainingAmount,
+                    remainingAmount: remainingAmount,
+                    updatedDebts
+                }
+            });
+        }
+        catch (error) {
+            console.error('Error registering payment:', error);
+            res.status(500).json({ error: error.message || 'Error al registrar el pago' });
+        }
+    }
+    async get_pending_amount(req, res) {
+        try {
+            const clientId = parseInt(req.params.clientId);
+            const activeDebt = await server_1.prisma.client_debt.findFirst({
+                where: {
+                    client_id: clientId,
+                    pending_amount: { gt: 0 }
+                },
+                orderBy: { created_at: 'desc' }
+            });
+            const pendingAmount = activeDebt ? Number(activeDebt.pending_amount) : 0;
+            res.json({
+                success: true,
+                data: {
+                    clientId,
+                    pendingAmount
+                }
+            });
+        }
+        catch (error) {
+            console.error('Error getting pending amount:', error);
+            res.status(500).json({ error: error.message || 'Error al obtener el monto pendiente' });
+        }
+    }
+    async getPendingAmount(req, res) {
+        try {
+            const clientId = parseInt(req.params.clientId);
+            const activeDebt = await server_1.prisma.client_debt.findFirst({
+                where: {
+                    client_id: clientId,
+                    pending_amount: { gt: 0 }
+                },
+                orderBy: { created_at: 'desc' }
+            });
+            const pendingAmount = activeDebt ? Number(activeDebt.pending_amount) : 0;
+            res.json({
+                success: true,
+                data: {
+                    clientId,
+                    pendingAmount
+                }
+            });
+        }
+        catch (error) {
+            console.error('Error getting pending amount:', error);
+            res.status(500).json({ error: error.message || 'Error al obtener el monto pendiente' });
         }
     }
 }

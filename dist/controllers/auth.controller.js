@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.authController = exports.AuthController = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const server_1 = require("../server");
+const jwt_1 = require("../utils/jwt");
 class AuthController {
     async register(req, res) {
         try {
@@ -16,7 +17,6 @@ class AuthController {
                     message: 'Email, contraseña y nombre son obligatorios'
                 });
             }
-            // Verificar si el usuario ya existe
             const existingUser = await server_1.prisma.users.findUnique({
                 where: { email }
             });
@@ -26,21 +26,19 @@ class AuthController {
                     message: 'El email ya está registrado'
                 });
             }
-            // Hashear contraseña
             const hashedPassword = await bcrypt_1.default.hash(password, 10);
-            // Crear usuario - USANDO LOS NOMBRES DE COLUMNA DEL SCHEMA (snake_case)
             const user = await server_1.prisma.users.create({
                 data: {
                     email,
                     password: hashedPassword,
-                    full_name: fullName, // ¡CORREGIDO! full_name en lugar de fullName
+                    full_name: fullName,
                     role,
-                    is_active: true // ¡CORREGIDO! is_active en lugar de isActive
+                    is_active: true
                 },
                 select: {
                     id: true,
                     email: true,
-                    full_name: true, // ¡CORREGIDO!
+                    full_name: true,
                     role: true
                 }
             });
@@ -50,7 +48,7 @@ class AuthController {
                 data: {
                     id: user.id,
                     email: user.email,
-                    fullName: user.full_name, // Mapear a camelCase para la respuesta
+                    fullName: user.full_name,
                     role: user.role
                 }
             });
@@ -88,11 +86,16 @@ class AuthController {
                     message: 'Credenciales inválidas'
                 });
             }
-            // Guardar en sesión
+            // Generar token JWT
+            const token = (0, jwt_1.generateToken)({
+                id: user.id,
+                email: user.email,
+                role: user.role || 'user'
+            });
+            // Mantener sesión por cookie para compatibilidad
             req.session.userId = user.id;
             req.session.userRole = user.role || undefined;
             req.session.userEmail = user.email;
-            // Guardar sesión explícitamente
             await new Promise((resolve, reject) => {
                 req.session.save((err) => {
                     if (err)
@@ -107,9 +110,10 @@ class AuthController {
                 data: {
                     id: user.id,
                     email: user.email,
-                    fullName: user.full_name, // Mapear a camelCase
+                    fullName: user.full_name,
                     role: user.role
-                }
+                },
+                token
             });
         }
         catch (error) {
@@ -137,18 +141,31 @@ class AuthController {
     }
     async me(req, res) {
         try {
-            if (!req.session.userId) {
+            // Primero intentar con JWT
+            const token = (0, jwt_1.extractToken)(req);
+            let userId = null;
+            if (token) {
+                const payload = (0, jwt_1.verifyToken)(token);
+                if (payload) {
+                    userId = payload.id;
+                }
+            }
+            // Fallback a sesión por cookie
+            if (!userId && req.session.userId) {
+                userId = req.session.userId;
+            }
+            if (!userId) {
                 return res.status(401).json({
                     success: false,
                     message: 'No autenticado'
                 });
             }
             const user = await server_1.prisma.users.findUnique({
-                where: { id: req.session.userId },
+                where: { id: userId },
                 select: {
                     id: true,
                     email: true,
-                    full_name: true, // ¡CORREGIDO!
+                    full_name: true,
                     role: true
                 }
             });
@@ -163,7 +180,7 @@ class AuthController {
                 data: {
                     id: user.id,
                     email: user.email,
-                    fullName: user.full_name, // Mapear a camelCase
+                    fullName: user.full_name,
                     role: user.role
                 }
             });

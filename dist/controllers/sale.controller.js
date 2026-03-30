@@ -55,10 +55,12 @@ class VentaController {
                 for (const payment of paymentItems) {
                     const amount = Number(payment.amount) || 0;
                     const method = payment.method || 'cash';
+                    console.log('💰 Procesando pago:', { amount, method, clientId });
                     const methodLower = method.toLowerCase();
                     const isCredit = methodLower === 'credit' || methodLower === 'credito';
                     if (isCredit) {
                         // Es crédito - no va a payments, va a client_debts
+                        console.log('💳 Es crédito, creando deuda por:', amount);
                         hasCredit = true;
                         debtsToCreate.push({
                             client_id: clientId,
@@ -97,12 +99,16 @@ class VentaController {
             }
             // ... después de procesar descuentos y pagos ...
             // Determinar estado de pago
+            // Determinar estado de pago
             let paymentStatus = 'pending';
             if (totalPaid >= finalTotal) {
                 paymentStatus = 'paid';
             }
-            else if (totalPaid > 0) {
+            else if (totalPaid > 0 && totalPaid < finalTotal) {
                 paymentStatus = 'partial';
+            }
+            else {
+                paymentStatus = 'pending';
             }
             // Calcular montos aplicados y pendientes (SOLO UNA VEZ)
             const amountApplied = totalPaid;
@@ -139,9 +145,10 @@ class VentaController {
                     payments: true
                 }
             });
-            // Crear deudas en client_debts
+            // Crear o actualizar deudas en client_debts
             if (debtsToCreate.length > 0) {
                 for (const debt of debtsToCreate) {
+                    // Siempre crear una nueva deuda, no consolidar
                     await server_1.prisma.client_debt.create({
                         data: {
                             client_id: debt.client_id,

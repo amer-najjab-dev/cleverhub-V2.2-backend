@@ -36,23 +36,36 @@ app.set('trust proxy', 1); // Render usa proxies
 // ==========================================
 const allowedOrigins = [
     'http://localhost:5173',
-    process.env.FRONTEND_URL || 'https://cleverhub-v2-frontend.vercel.app'
-].filter(Boolean);
+    'http://localhost:5174',
+    process.env.FRONTEND_URL || 'https://cleverhub-v2-frontend.vercel.app',
+    // Expresión regular para aceptar cualquier preview de Vercel
+    /^https:\/\/cleverhub-v2-frontend-git-[a-zA-Z0-9-]+\.vercel\.app$/
+];
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
-        // Permitir requests sin origin (como apps móviles o Postman)
+        // Permitir requests sin origin (Postman, apps móviles)
         if (!origin)
             return callback(null, true);
-        if (allowedOrigins.includes(origin)) {
+        // Verificar si el origen coincide con algún patrón (string o regex)
+        const allowed = allowedOrigins.some(allowedOrigin => {
+            if (typeof allowedOrigin === 'string') {
+                return origin === allowedOrigin;
+            }
+            if (allowedOrigin instanceof RegExp) {
+                return allowedOrigin.test(origin);
+            }
+            return false;
+        });
+        if (allowed) {
             callback(null, true);
         }
         else {
+            console.warn('🚫 Origen bloqueado por CORS:', origin);
             callback(new Error('No autorizado por CORS'));
         }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-region', 'Cookie']
+    optionsSuccessStatus: 200
 }));
 app.use(express_1.default.json());
 // ==========================================
@@ -73,7 +86,8 @@ app.use((0, express_session_1.default)({
         secure: isProd, // true en producción (HTTPS)
         maxAge: 1000 * 60 * 60 * 8, // 8 horas
         sameSite: isProd ? 'none' : 'lax', // 'none' permite cross-site
-        path: '/'
+        path: '/',
+        domain: '.up.railway.app'
     },
 }));
 // ==========================================
@@ -119,6 +133,11 @@ app.get('/', (req, res) => {
 // 7. MANEJADOR DE ERRORES 404
 // ==========================================
 app.use((req, res) => {
+    const origin = req.headers.origin;
+    if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
     res.status(404).json({
         success: false,
         error: 'Ruta no encontrada',
