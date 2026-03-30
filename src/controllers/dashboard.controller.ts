@@ -1,10 +1,199 @@
+// src/controllers/dashboard.controller.ts
 import { Request, Response } from 'express';
 import { prisma } from '../server';
 
+// Extender el tipo Request para incluir el usuario autenticado y pharmacyFilter
+interface AuthRequest extends Request {
+  user?: {
+    id: number;
+    email: string;
+    role: string;
+    pharmacyId: number;
+  };
+  pharmacyFilter?: {
+    pharmacy_id?: number;
+  };
+}
+
 export class DashboardController {
   
-  async getKPIs(req: Request, res: Response) {
+  // Dashboard principal con filtro multi-tenant
+  async getDashboard(req: AuthRequest, res: Response) {
     try {
+      const pharmacyFilter = req.pharmacyFilter || {};
+      const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
+      
+      if (isSuperAdmin) {
+        // Dashboard global para SUPER_ADMIN
+        const totalPharmacies = await prisma.pharmacy.count();
+        const totalUsers = await prisma.users.count();
+        const totalSales = await prisma.sales.aggregate({
+          _sum: { total: true }
+        });
+        
+        // Ventas por farmacia
+        const salesByPharmacy = await prisma.sales.groupBy({
+          by: ['pharmacy_id'],
+          _sum: { total: true },
+          _count: true,
+          orderBy: {
+            _sum: {
+              total: 'desc'
+            }
+          },
+          take: 10
+        });
+        
+        // Obtener nombres de farmacias
+        const pharmacyIds = salesByPharmacy.map(s => s.pharmacy_id).filter(id => id !== null);
+        const pharmacies = await prisma.pharmacy.findMany({
+          where: { id: { in: pharmacyIds as number[] } },
+          select: { id: true, name: true }
+        });
+        
+        const pharmacyMap = new Map(pharmacies.map(p => [p.id, p.name]));
+        
+        const enrichedSalesByPharmacy = salesByPharmacy.map(sale => ({
+          pharmacy_id: sale.pharmacy_id,
+          pharmacy_name: sale.pharmacy_id ? pharmacyMap.get(sale.pharmacy_id) : 'Desconocido',
+          total_sales: sale._sum.total || 0,
+          transaction_count: sale._count
+        }));
+        
+        return res.json({
+          success: true,
+          data: {
+            total_pharmacies: totalPharmacies,
+            total_users: totalUsers,
+            total_sales: totalSales._sum.total || 0,
+            sales_by_pharmacy: enrichedSalesByPharmacy,
+            is_global: true
+          }
+        });
+      }
+      
+      // Dashboard de farmacia para ADMIN y EMPLOYEE
+      if (!pharmacyFilter.pharmacy_id) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'No tienes una farmacia asignada' 
+        });
+      }
+      
+      const stats = await prisma.sales.aggregate({
+        where: pharmacyFilter,
+        _sum: { total: true },
+        _count: true
+      });
+      
+      // Stock bajo
+      const lowStock = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          quantity: { lt: 10 },
+          expiry_date: { gt: new Date() }
+        }
+      });
+      
+      // Productos próximos a vencer
+      const expiringProducts = await prisma.inventory_lots.findMany({
+        where: {
+          ...pharmacyFilter,
+          expiry_date: {
+            lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 días
+            gt: new Date()
+          }
+        },
+        include: {
+          product: {
+            select: { name: true }
+          }
+        },
+        orderBy: { expiry_date: 'asc' },
+        take: 5
+      });
+      
+      // Ventas recientes
+      const recentSales = await prisma.sales.findMany({
+        where: pharmacyFilter,
+        take: 10,
+        orderBy: { created_at: 'desc' },
+        include: { 
+          client: true,
+          user: {
+            select: { full_name: true }
+          }
+        }
+      });
+      
+      // Clientes más frecuentes
+      const topClients = await prisma.sales.groupBy({
+        by: ['client_id'],
+        where: {
+          ...pharmacyFilter,
+          client_id: { not: null }
+        },
+        _sum: { total: true },
+        _count: true,
+        orderBy: {
+          _sum: {
+            total: 'desc'
+          }
+        },
+        take: 5
+      });
+      
+      const clientIds = topClients.map(c => c.client_id).filter(id => id !== null);
+      const clients = await prisma.clients.findMany({
+        where: { id: { in: clientIds as number[] } },
+        select: { id: true, first_name: true, last_name: true }
+      });
+      
+      const clientMap = new Map(clients.map(c => [c.id, c]));
+      
+      const enrichedTopClients = topClients.map(client => {
+        const clientData = client.client_id ? clientMap.get(client.client_id) : null;
+        return {
+          client_id: client.client_id,
+          client_name: clientData ? `${clientData.first_name} ${clientData.last_name}` : 'Cliente no registrado',
+          total_spent: client._sum.total || 0,
+          purchase_count: client._count
+        };
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          total_sales: stats._sum.total || 0,
+          total_transactions: stats._count,
+          low_stock_alerts: lowStock,
+          expiring_products: expiringProducts.map(p => ({
+            product_name: p.product.name,
+            batch_number: p.batch_number,
+            expiry_date: p.expiry_date,
+            quantity: p.quantity
+          })),
+          recent_sales: recentSales.map(sale => ({
+            id: sale.id,
+            sale_number: sale.sale_number,
+            total: sale.total,
+            client_name: sale.client ? `${sale.client.first_name} ${sale.client.last_name}` : 'Cliente no registrado',
+            user_name: sale.user?.full_name || 'Usuario',
+            created_at: sale.created_at
+          })),
+          top_clients: enrichedTopClients,
+          is_global: false
+        }
+      });
+    } catch (error: any) {
+      console.error('Error en getDashboard:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getKPIs(req: AuthRequest, res: Response) {
+    try {
+      const pharmacyFilter = req.pharmacyFilter || {};
       const { period = 'today' } = req.query;
       
       const now = new Date();
@@ -27,6 +216,7 @@ export class DashboardController {
       // Ventas del período actual
       const currentPeriodSales = await prisma.sales.findMany({
         where: {
+          ...pharmacyFilter,
           created_at: { gte: startDate },
           sale_status: 'completed'
         }
@@ -38,6 +228,7 @@ export class DashboardController {
       
       const previousPeriodSales = await prisma.sales.findMany({
         where: {
+          ...pharmacyFilter,
           created_at: { gte: previousStartDate, lt: startDate },
           sale_status: 'completed'
         }
@@ -50,10 +241,11 @@ export class DashboardController {
         ? todaySales / currentPeriodSales.length 
         : 0;
 
-      const lowStockCount = await prisma.products.count({
+      const lowStockCount = await prisma.inventory_lots.count({
         where: {
-          stock: { lt: 10 },
-          active: true
+          ...pharmacyFilter,
+          quantity: { lt: 10 },
+          expiry_date: { gt: new Date() }
         }
       });
 
@@ -64,6 +256,7 @@ export class DashboardController {
       const saleItems = await prisma.sale_items.findMany({
         where: {
           sale: {
+            ...pharmacyFilter,
             created_at: { gte: startDate },
             sale_status: 'completed'
           }
@@ -75,6 +268,7 @@ export class DashboardController {
 
       const pendingOrders = await prisma.sales.count({
         where: {
+          ...pharmacyFilter,
           payment_status: 'pending',
           sale_status: 'completed'
         }
@@ -104,8 +298,9 @@ export class DashboardController {
     }
   }
 
-  async getHourlySales(req: Request, res: Response) {
+  async getHourlySales(req: AuthRequest, res: Response) {
     try {
+      const pharmacyFilter = req.pharmacyFilter || {};
       const { date } = req.query;
       
       let targetDate = date ? new Date(date as string) : new Date();
@@ -121,6 +316,7 @@ export class DashboardController {
         FROM sales
         WHERE created_at BETWEEN ${targetDate} AND ${nextDay}
           AND sale_status = 'completed'
+          ${pharmacyFilter.pharmacy_id ? `AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : ''}
         GROUP BY EXTRACT(HOUR FROM created_at)
         ORDER BY hour ASC
       `;
@@ -148,8 +344,9 @@ export class DashboardController {
     }
   }
 
-  async getComparativeData(req: Request, res: Response) {
+  async getComparativeData(req: AuthRequest, res: Response) {
     try {
+      const pharmacyFilter = req.pharmacyFilter || {};
       const now = new Date();
       
       const weekStart = new Date(now);
@@ -165,6 +362,7 @@ export class DashboardController {
         FROM sales
         WHERE created_at BETWEEN ${weekStart} AND ${now}
           AND sale_status = 'completed'
+          ${pharmacyFilter.pharmacy_id ? `AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : ''}
         GROUP BY EXTRACT(DOW FROM created_at)
       `;
 
@@ -175,6 +373,7 @@ export class DashboardController {
         FROM sales
         WHERE created_at BETWEEN ${previousWeekStart} AND ${weekStart}
           AND sale_status = 'completed'
+          ${pharmacyFilter.pharmacy_id ? `AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : ''}
         GROUP BY EXTRACT(DOW FROM created_at)
       `;
 
@@ -183,8 +382,8 @@ export class DashboardController {
       const result = [];
       for (let i = 1; i <= 7; i++) {
         const dayIndex = i % 7;
-        const currentDay = (currentWeekSales as any[]).find((d: any) => Number(d.dayOfWeek) === dayIndex);
-        const previousDay = (previousWeekSales as any[]).find((d: any) => Number(d.dayOfWeek) === dayIndex);
+        const currentDay = (currentWeekSales as any[]).find((d: any) => Number(d.dayofweek) === dayIndex);
+        const previousDay = (previousWeekSales as any[]).find((d: any) => Number(d.dayofweek) === dayIndex);
         
         result.push({
           day: dayNames[dayIndex],
@@ -207,8 +406,9 @@ export class DashboardController {
     }
   }
 
-  async getTopProducts(req: Request, res: Response) {
+  async getTopProducts(req: AuthRequest, res: Response) {
     try {
+      const pharmacyFilter = req.pharmacyFilter || {};
       const limit = Number(req.query.limit) || 10;
       const period = req.query.period as string;
       const startDateParam = req.query.startDate as string;
@@ -221,7 +421,7 @@ export class DashboardController {
       if (startDateParam && endDateParam) {
         startDate = new Date(startDateParam);
         endDate = new Date(endDateParam);
-        endDate.setHours(23, 59, 59, 999); // Final del día
+        endDate.setHours(23, 59, 59, 999);
       } else {
         // Usar período predefinido
         const now = new Date();
@@ -244,6 +444,7 @@ export class DashboardController {
         by: ['product_id'],
         where: {
           sale: {
+            ...pharmacyFilter,
             created_at: { 
               gte: startDate,
               lte: endDate
@@ -274,6 +475,7 @@ export class DashboardController {
             where: {
               product_id: item.product_id,
               sale: {
+                ...pharmacyFilter,
                 created_at: { 
                   gte: startDate,
                   lte: endDate
@@ -314,8 +516,9 @@ export class DashboardController {
     }
   }
 
-  async getAverageTicket(req: Request, res: Response) {
+  async getAverageTicket(req: AuthRequest, res: Response) {
     try {
+      const pharmacyFilter = req.pharmacyFilter || {};
       const period = (req.query.period as string) || 'week';
       
       const now = new Date();
@@ -337,6 +540,7 @@ export class DashboardController {
 
       const sales = await prisma.sales.findMany({
         where: {
+          ...pharmacyFilter,
           created_at: { gte: startDate },
           sale_status: 'completed'
         }
@@ -359,14 +563,16 @@ export class DashboardController {
     }
   }
 
-  async getLowStockCount(req: Request, res: Response) {
+  async getLowStockCount(req: AuthRequest, res: Response) {
     try {
+      const pharmacyFilter = req.pharmacyFilter || {};
       const threshold = Number(req.query.threshold) || 10;
       
-      const count = await prisma.products.count({
+      const count = await prisma.inventory_lots.count({
         where: {
-          stock: { lt: threshold },
-          active: true
+          ...pharmacyFilter,
+          quantity: { lt: threshold },
+          expiry_date: { gt: new Date() }
         }
       });
 
@@ -384,8 +590,9 @@ export class DashboardController {
     }
   }
 
-  async getQuickSummary(req: Request, res: Response) {
+  async getQuickSummary(req: AuthRequest, res: Response) {
     try {
+      const pharmacyFilter = req.pharmacyFilter || {};
       const now = new Date();
       const startOfDay = new Date(now.setHours(0, 0, 0, 0));
       
@@ -397,6 +604,7 @@ export class DashboardController {
         FROM sales
         WHERE created_at > ${startOfDay}
           AND sale_status = 'completed'
+          ${pharmacyFilter.pharmacy_id ? `AND pharmacy_id = ${pharmacyFilter.pharmacy_id}` : ''}
         GROUP BY EXTRACT(HOUR FROM created_at)
         ORDER BY value DESC
         LIMIT 1
@@ -415,6 +623,7 @@ export class DashboardController {
         by: ['product_id'],
         where: {
           sale: {
+            ...pharmacyFilter,
             created_at: { gte: weekAgo },
             sale_status: 'completed'
           }
@@ -449,6 +658,7 @@ export class DashboardController {
       const topCustomerData = await prisma.sales.groupBy({
         by: ['client_id'],
         where: {
+          ...pharmacyFilter,
           created_at: { gte: monthAgo },
           sale_status: 'completed',
           client_id: { not: null }
@@ -491,6 +701,57 @@ export class DashboardController {
         success: false,
         message: error.message
       });
+    }
+  }
+
+  // Nuevo método para obtener estadísticas de stock
+  async getStockStats(req: AuthRequest, res: Response) {
+    try {
+      const pharmacyFilter = req.pharmacyFilter || {};
+      
+      const totalProducts = await prisma.inventory_lots.aggregate({
+        where: pharmacyFilter,
+        _sum: { quantity: true }
+      });
+      
+      const lowStock = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          quantity: { lt: 10 },
+          expiry_date: { gt: new Date() }
+        }
+      });
+      
+      const expiringThisMonth = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          expiry_date: {
+            lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            gt: new Date()
+          }
+        }
+      });
+      
+      const expired = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          expiry_date: { lt: new Date() },
+          quantity: { gt: 0 }
+        }
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          total_units: totalProducts._sum.quantity || 0,
+          low_stock_items: lowStock,
+          expiring_items: expiringThisMonth,
+          expired_items: expired
+        }
+      });
+    } catch (error: any) {
+      console.error('Error en getStockStats:', error);
+      res.status(500).json({ success: false, message: error.message });
     }
   }
 }

@@ -2,13 +2,16 @@ import { Request, Response } from 'express';
 import { prisma } from '../server';
 import { CreateSaleDTO } from '../dtos/sale.dto';
 
-// Extender el tipo Request para incluir el usuario autenticado
+// Extender el tipo Request para incluir el usuario autenticado y pharmacyFilter
 interface AuthRequest extends Request {
   user?: {
     id: number;
     email: string;
     role: string;
     pharmacyId: number;
+  };
+  pharmacyFilter?: {
+    pharmacy_id?: number;
   };
 }
 
@@ -42,7 +45,7 @@ export class VentaController {
         return res.status(400).json({ error: 'Faltan datos: userId, items' });
       }
 
-      // Verificar que el usuario pertenece a la farmacia
+      // Verificar que el usuario pertenece a la farmacia usando pharmacyFilter
       const user = await prisma.users.findFirst({
         where: {
           id: userId,
@@ -94,6 +97,15 @@ export class VentaController {
           return res.status(400).json({ 
             success: false, 
             message: `Producto con ID ${item.productId} no encontrado` 
+          });
+        }
+
+        // Verificar stock disponible (considerando lotes)
+        const availableStock = await this.getAvailableStock(item.productId, pharmacyId);
+        if (availableStock < item.quantity) {
+          return res.status(400).json({
+            success: false,
+            message: `Stock insuficiente para ${product.name}. Disponible: ${availableStock}, Solicitado: ${item.quantity}`
           });
         }
 
@@ -200,7 +212,7 @@ export class VentaController {
       // Crear venta con Prisma (SOLO UNA VEZ)
       const venta = await prisma.sales.create({
         data: {
-          pharmacy_id: pharmacyId,  // ← AÑADIR pharmacyId
+          pharmacy_id: pharmacyId,
           sale_number: saleNumber,
           user_id: userId,
           client_id: clientId,
@@ -286,6 +298,9 @@ export class VentaController {
         }
       }
 
+      // Registrar movimiento de stock (descontar inventario)
+      await this.updateStockAfterSale(items, pharmacyId, saleNumber);
+
       res.status(201).json({
         success: true,
         data: venta
@@ -301,19 +316,13 @@ export class VentaController {
   async obtenerPorId(req: AuthRequest, res: Response) {
     try {
       const id = parseInt(req.params.id);
-      const pharmacyId = req.user?.pharmacyId;
-      
-      if (!pharmacyId) {
-        return res.status(403).json({ 
-          success: false, 
-          message: 'Usuario sin farmacia asignada' 
-        });
-      }
+      // Usar pharmacyFilter del middleware para filtrar automáticamente
+      const pharmacyFilter = req.pharmacyFilter || {};
       
       const venta = await prisma.sales.findFirst({
         where: { 
           id,
-          pharmacy_id: pharmacyId  // ← FILTRAR POR FARMACIA
+          ...pharmacyFilter  // Aplica filtro de farmacia automáticamente
         },
         include: {
           sale_items: {
@@ -343,14 +352,8 @@ export class VentaController {
 
   async listar(req: AuthRequest, res: Response) {
     try {
-      const pharmacyId = req.user?.pharmacyId;
-      
-      if (!pharmacyId) {
-        return res.status(403).json({ 
-          success: false, 
-          message: 'Usuario sin farmacia asignada' 
-        });
-      }
+      // Usar pharmacyFilter del middleware para filtrar automáticamente
+      const pharmacyFilter = req.pharmacyFilter || {};
       
       const {
         startDate,
@@ -361,11 +364,14 @@ export class VentaController {
         paymentStatus,
         paymentMethod,
         limit = 50,
-        offset = 0
+        offset = 0,
+        sortBy = 'created_at',
+        sortOrder = 'desc'
       } = req.query;
 
+      // Construir filtros base con pharmacyFilter
       const where: any = {
-        pharmacy_id: pharmacyId  // ← FILTRAR POR FARMACIA
+        ...pharmacyFilter  // Aplica filtro de farmacia automáticamente
       };
 
       if (startDate && endDate) {
@@ -394,7 +400,7 @@ export class VentaController {
           payments: true
         },
         orderBy: {
-          created_at: 'desc'
+          [sortBy as string]: sortOrder
         },
         take: Number(limit),
         skip: Number(offset)
@@ -402,21 +408,228 @@ export class VentaController {
 
       const total = await prisma.sales.count({ where });
 
+      // Calcular estadísticas adicionales
+      const stats = {
+        totalSales: ventas.length,
+        totalRevenue: ventas.reduce((sum, sale) => sum + Number(sale.total), 0),
+        totalPaid: ventas.reduce((sum, sale) => sum + Number(sale.paid_amount || 0), 0),
+        totalPending: ventas.reduce((sum, sale) => sum + Number(sale.amount_pending || 0), 0),
+        averageTicket: ventas.length > 0 ? ventas.reduce((sum, sale) => sum + Number(sale.total), 0) / ventas.length : 0
+      };
+
       res.json({
         success: true,
         data: ventas,
+        stats,
         meta: {
           total,
           limit: Number(limit),
-          offset: Number(offset)
+          offset: Number(offset),
+          sortBy,
+          sortOrder
         }
       });
       
     } catch (error: any) {
+      console.error('Error listing sales:', error);
       res.status(500).json({ 
         success: false, 
         message: error.message 
       });
+    }
+  }
+
+  async getTodaySales(req: AuthRequest, res: Response) {
+    try {
+      const pharmacyFilter = req.pharmacyFilter || {};
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const sales = await prisma.sales.findMany({
+        where: {
+          ...pharmacyFilter,
+          created_at: {
+            gte: today,
+            lt: tomorrow
+          }
+        },
+        include: {
+          client: true,
+          user: true,
+          sale_items: true,
+          payments: true
+        },
+        orderBy: {
+          created_at: 'desc'
+        }
+      });
+
+      const total = sales.reduce((sum, sale) => sum + Number(sale.total), 0);
+      const paid = sales.reduce((sum, sale) => sum + Number(sale.paid_amount || 0), 0);
+
+      res.json({
+        success: true,
+        data: {
+          sales,
+          total,
+          paid,
+          pending: total - paid,
+          count: sales.length
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  async getSalesByPeriod(req: AuthRequest, res: Response) {
+    try {
+      const pharmacyFilter = req.pharmacyFilter || {};
+      const { period = 'week' } = req.query;
+      
+      let startDate = new Date();
+      switch (period) {
+        case 'day':
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case 'week':
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case 'month':
+          startDate.setMonth(startDate.getMonth() - 1);
+          break;
+        case 'year':
+          startDate.setFullYear(startDate.getFullYear() - 1);
+          break;
+        default:
+          startDate.setDate(startDate.getDate() - 7);
+      }
+
+      const sales = await prisma.sales.findMany({
+        where: {
+          ...pharmacyFilter,
+          created_at: {
+            gte: startDate
+          }
+        },
+        include: {
+          client: true,
+          sale_items: {
+            include: {
+              product: true
+            }
+          }
+        },
+        orderBy: {
+          created_at: 'asc'
+        }
+      });
+
+      // Agrupar por día
+      const dailyData = new Map();
+      sales.forEach(sale => {
+        const date = sale.created_at?.toISOString().split('T')[0];
+        if (date) {
+          if (!dailyData.has(date)) {
+            dailyData.set(date, { date, total: 0, count: 0 });
+          }
+          const dayData = dailyData.get(date);
+          dayData.total += Number(sale.total);
+          dayData.count++;
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          period,
+          totalSales: sales.length,
+          totalRevenue: sales.reduce((sum, sale) => sum + Number(sale.total), 0),
+          dailyData: Array.from(dailyData.values())
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  }
+
+  // Método auxiliar para verificar stock disponible
+  private async getAvailableStock(productId: number, pharmacyId: number): Promise<number> {
+    const lots = await prisma.inventory_lots.findMany({
+      where: {
+        product_id: productId,
+        pharmacy_id: pharmacyId,
+        expiry_date: {
+          gt: new Date()
+        },
+        quantity: {
+          gt: 0
+        }
+      }
+    });
+
+    return lots.reduce((sum, lot) => sum + lot.quantity, 0);
+  }
+
+  // Método auxiliar para actualizar stock después de una venta
+  private async updateStockAfterSale(items: any[], pharmacyId: number, saleNumber: string) {
+    for (const item of items) {
+      // Buscar lotes disponibles por orden de expiración (FIFO)
+      const availableLots = await prisma.inventory_lots.findMany({
+        where: {
+          product_id: item.productId,
+          pharmacy_id: pharmacyId,
+          expiry_date: {
+            gt: new Date()
+          },
+          quantity: {
+            gt: 0
+          }
+        },
+        orderBy: {
+          expiry_date: 'asc'
+        }
+      });
+
+      let remainingQuantity = item.quantity;
+      
+      for (const lot of availableLots) {
+        if (remainingQuantity <= 0) break;
+        
+        const quantityToTake = Math.min(lot.quantity, remainingQuantity);
+        
+        // Actualizar lote
+        await prisma.inventory_lots.update({
+          where: { id: lot.id },
+          data: {
+            quantity: {
+              decrement: quantityToTake
+            }
+          }
+        });
+        
+        // Registrar movimiento de stock
+        await prisma.stock_movements.create({
+          data: {
+            product_id: item.productId,
+            pharmacy_id: pharmacyId,
+            lot_id: lot.id,
+            type: 'sale',
+            quantity: quantityToTake,
+            stock_after: lot.quantity - quantityToTake,
+            notes: `Venta: ${saleNumber}`,
+            created_at: new Date()
+          }
+        });
+        
+        remainingQuantity -= quantityToTake;
+      }
+      
+      if (remainingQuantity > 0) {
+        console.warn(`Stock insuficiente para producto ${item.productId}, faltan ${remainingQuantity} unidades`);
+      }
     }
   }
 }
