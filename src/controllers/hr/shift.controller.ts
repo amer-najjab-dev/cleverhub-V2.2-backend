@@ -5,9 +5,25 @@ export const shiftController = {
   getAll: async (req: Request, res: Response) => {
     try {
       const shifts = await prisma.shifts.findMany({
+        include: {
+          pharmacy_configs: true
+        },
         orderBy: { id: 'asc' }
       });
-      res.json({ success: true, data: shifts });
+      
+      // Formatear para que min_employees_required venga de la configuración si existe
+      const formattedShifts = shifts.map(shift => ({
+        id: shift.id,
+        name: shift.name,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        is_guard: shift.is_guard,
+        min_employees_required: shift.pharmacy_configs?.[0]?.min_employees_required ?? shift.min_employees_required,
+        created_at: shift.created_at,
+        updated_at: shift.updated_at
+      }));
+      
+      res.json({ success: true, data: formattedShifts });
     } catch (error: any) {
       console.error('Error getting shifts:', error);
       res.status(500).json({ success: false, message: error.message });
