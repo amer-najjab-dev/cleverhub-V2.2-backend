@@ -6,6 +6,11 @@ import pgSession from 'connect-pg-simple';
 import { Pool } from 'pg';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { requireAuth } from './middleware/auth';
+import { addPharmacyFilter } from './middleware/rbac';
+
+// Importar controladores para rutas públicas
+import { authController } from './controllers/auth.controller';
 
 // Extender tipos de sesión
 declare module 'express-session' {
@@ -13,6 +18,7 @@ declare module 'express-session' {
     userId: number;
     userRole?: string;
     userEmail?: string;
+    pharmacyId?: number;
   }
 }
 
@@ -47,9 +53,13 @@ app.set('trust proxy', 1); // Render usa proxies
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
+  'http://localhost:3000',
   process.env.FRONTEND_URL || 'https://cleverhub-v2-frontend.vercel.app',
   // Expresión regular para aceptar cualquier preview de Vercel
-  /^https:\/\/cleverhub-v2-frontend-git-[a-zA-Z0-9-]+\.vercel\.app$/
+  /^https:\/\/cleverhub-v2-frontend-git-[a-zA-Z0-9-]+\.vercel\.app$/,
+  /^https:\/\/cleverhub-v2-frontend-.*\.vercel\.app$/,
+  // Railway app domains
+  /\.up\.railway\.app$/
 ];
 
 app.use(cors({
@@ -84,9 +94,10 @@ app.use(express.json());
 // ==========================================
 // 3. CONFIGURACIÓN DE SESIONES (PRODUCCIÓN)
 // ==========================================
+const PgSession = pgSession(session);
 app.use(
   session({
-    store: new (pgSession(session))({
+    store: new PgSession({
       pool: pgPool,
       tableName: 'session',
       createTableIfMissing: true,
@@ -101,7 +112,6 @@ app.use(
       maxAge: 1000 * 60 * 60 * 8, // 8 horas
       sameSite: isProd ? 'none' : 'lax', // 'none' permite cross-site
       path: '/',
-      domain: '.up.railway.app'
     },
   })
 );
@@ -115,14 +125,11 @@ app.use((req, res, next) => {
 });
 
 // ==========================================
-// 5. RUTAS
+// 5. RUTAS PÚBLICAS (Sin autenticación)
 // ==========================================
-import routes from './routes';
-app.use('/api', routes);
+console.log('🔄 Cargando rutas públicas...');
 
-// ==========================================
-// 6. RUTAS DE SALUD
-// ==========================================
+// Ruta de salud (pública)
 app.get('/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -139,6 +146,7 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// Ruta raíz (pública)
 app.get('/', (req, res) => {
   res.json({ 
     message: 'CleverHub V2 Backend 🚀',
@@ -147,6 +155,67 @@ app.get('/', (req, res) => {
     environment: process.env.NODE_ENV
   });
 });
+
+// Rutas de autenticación (públicas)
+app.post('/api/auth/login', authController.login);
+app.post('/api/auth/logout', authController.logout);
+// app.post('/api/auth/register', authController.register); // Si existe
+// app.post('/api/auth/forgot-password', authController.forgotPassword); // TODO: Implementar
+// app.post('/api/auth/reset-password', authController.resetPassword); // TODO: Implementar
+
+// Ruta para obtener usuario actual (requiere autenticación)
+// TODO: Implementar getMe en authController
+// app.get('/api/auth/me', requireAuth, authController.getMe);
+
+// Ruta temporal para obtener usuario actual (alternativa)
+app.get('/api/auth/me', requireAuth, async (req: any, res) => {
+  try {
+    const userId = req.session.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'No autenticado' });
+    }
+    
+    const user = await prisma.users.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        full_name: true,
+        role: true,
+        is_active: true,
+        pharmacy_id: true,
+        pharmacy: {
+          select: {
+            id: true,
+            name: true,
+            license: true
+          }
+        }
+      }
+    });
+    
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
+    }
+    
+    res.json({ success: true, data: user });
+  } catch (error: any) {
+    console.error('Error getting current user:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==========================================
+// 6. RUTAS AUTENTICADAS (Con middleware)
+// ==========================================
+console.log('🔄 Cargando rutas autenticadas...');
+
+// Importar rutas
+import routes from './routes';
+
+// Aplicar middleware de autenticación a todas las rutas bajo /api
+// El middleware addPharmacyFilter añade el filtro de farmacia automáticamente
+app.use('/api', requireAuth, addPharmacyFilter, routes);
 
 // ==========================================
 // 7. MANEJADOR DE ERRORES 404
@@ -165,7 +234,46 @@ app.use((req, res) => {
 });
 
 // ==========================================
-// 8. ARRANQUE DEL SERVIDOR
+// 8. MANEJADOR DE ERRORES GLOBAL
+// ==========================================
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('❌ Error global:', err);
+  
+  // Error de CORS
+  if (err.message === 'No autorizado por CORS') {
+    return res.status(403).json({ 
+      success: false, 
+      error: 'Origen no autorizado' 
+    });
+  }
+  
+  // Error de autenticación
+  if (err.message === 'No autorizado') {
+    return res.status(401).json({ 
+      success: false, 
+      error: 'No autorizado' 
+    });
+  }
+  
+  // Error de base de datos
+  if (err.code === 'P2002') {
+    return res.status(409).json({ 
+      success: false, 
+      error: 'Registro duplicado',
+      field: err.meta?.target
+    });
+  }
+  
+  // Error genérico
+  res.status(500).json({ 
+    success: false, 
+    error: 'Error interno del servidor',
+    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// ==========================================
+// 9. ARRANQUE DEL SERVIDOR
 // ==========================================
 async function startServer() {
   try {
@@ -174,11 +282,16 @@ async function startServer() {
 
     const userCount = await prisma.users.count();
     console.log(`📊 Usuarios en BD: ${userCount}`);
+    
+    // Verificar si hay farmacias
+    const pharmacyCount = await prisma.pharmacy.count();
+    console.log(`📊 Farmacias en BD: ${pharmacyCount}`);
 
     app.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`🚀 Servidor en puerto: ${PORT}`);
       console.log(`🌍 Entorno: ${process.env.NODE_ENV}`);
-      console.log(`🔗 Frontend permitido: ${allowedOrigins.join(', ')}`);
+      console.log(`🔗 Frontend permitido: ${allowedOrigins.filter(o => typeof o === 'string').join(', ')}`);
+      console.log(`🔐 Modo multi-tenant: Activado`);
     });
 
   } catch (error) {
@@ -187,6 +300,19 @@ async function startServer() {
   }
 }
 
+// Manejo de señales de cierre
+process.on('SIGINT', async () => {
+  console.log('🛑 Cerrando servidor...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('🛑 Cerrando servidor...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
 startServer();
 
-export default app; 
+export default app;
