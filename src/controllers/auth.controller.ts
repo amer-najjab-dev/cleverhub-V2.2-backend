@@ -95,10 +95,11 @@ export class AuthController {
       }
 
       // Generar token JWT
-      const token = generateToken({
-        id: user.id,
-        email: user.email,
-        role: user.role || 'user'
+      const token = generateToken({ 
+        id: user.id, 
+        email: user.email, 
+        role: user.role,
+        pharmacyId: user.pharmacy_id 
       });
 
       // Mantener sesión por cookie para compatibilidad

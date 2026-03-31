@@ -4,11 +4,11 @@ import jwt, { SignOptions, JwtPayload } from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'cleverhub-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
-export interface TokenPayload {
+interface TokenPayload {
   id: number;
   email: string;
   role: string;
-  pharmacyId: number | null;
+  pharmacyId: number | null;  // ✅ Puede ser null para SUPER_ADMIN
 }
 
 export const generateToken = (payload: TokenPayload): string => {

@@ -68,7 +68,14 @@ exports.employeeController = {
     },
     create: async (req, res) => {
         try {
-            const { email, fullName, phone, dni, password, defaultShiftId, vacationDays } = req.body;
+            const { email, fullName, defaultShiftId, vacationDays, password } = req.body;
+            const pharmacyId = req.user?.pharmacyId; // ← AÑADE ESTA LÍNEA
+            if (!pharmacyId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Usuario sin farmacia asignada'
+                });
+            }
             const existingUser = await server_1.prisma.users.findUnique({
                 where: { email }
             });
@@ -82,21 +89,28 @@ exports.employeeController = {
                     full_name: fullName,
                     password: hashedPassword,
                     role: 'employee',
-                    is_active: true
+                    is_active: true,
+                    pharmacy_id: pharmacyId // ← AÑADE ESTA LÍNEA - Asignar usuario a la farmacia
                 }
             });
             const employee = await server_1.prisma.employees.create({
                 data: {
+                    pharmacy_id: pharmacyId, // ← AÑADE ESTA LÍNEA - Asignar empleado a la farmacia
                     user_id: user.id,
                     default_shift_id: defaultShiftId || null,
                     vacation_days: vacationDays || 25,
                     vacation_days_used: 0
                 }
             });
+            // Obtener el usuario completo para la respuesta
+            const userData = await server_1.prisma.users.findUnique({
+                where: { id: user.id },
+                select: { id: true, email: true, full_name: true, role: true, is_active: true }
+            });
             res.status(201).json({
                 success: true,
                 message: 'Employee created successfully',
-                data: { ...employee, user }
+                data: { ...employee, user: userData }
             });
         }
         catch (error) {
@@ -163,7 +177,15 @@ exports.employeeController = {
     getAssignments: async (req, res) => {
         try {
             const { startDate, endDate, employeeId } = req.query;
-            const where = {};
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
+            const where = {
+                employee: {
+                    pharmacy_id: pharmacyId // ← FILTRAR POR FARMACIA
+                }
+            };
             if (startDate && endDate) {
                 where.date = {
                     gte: new Date(startDate),
@@ -176,24 +198,24 @@ exports.employeeController = {
             const assignments = await server_1.prisma.shift_assignments.findMany({
                 where,
                 include: {
-                    shift: true
+                    shift: true,
+                    employee: {
+                        include: {
+                            user: {
+                                select: { full_name: true }
+                            }
+                        }
+                    }
                 },
                 orderBy: { date: 'asc' }
             });
-            // Obtener empleados con sus usuarios
-            const assignmentsWithEmployees = await Promise.all(assignments.map(async (a) => {
-                const employee = await server_1.prisma.employees.findUnique({
-                    where: { id: a.employee_id }
-                });
-                let employeeWithName = null;
-                if (employee) {
-                    const user = await server_1.prisma.users.findUnique({
-                        where: { id: employee.user_id },
-                        select: { full_name: true }
-                    });
-                    employeeWithName = { ...employee, user: { full_name: user?.full_name } };
+            // Transformar los datos para mantener la estructura esperada por el frontend
+            const assignmentsWithEmployees = assignments.map((a) => ({
+                ...a,
+                employee: {
+                    ...a.employee,
+                    user: a.employee.user
                 }
-                return { ...a, employee: employeeWithName };
             }));
             res.json({ success: true, data: assignmentsWithEmployees });
         }
@@ -205,8 +227,32 @@ exports.employeeController = {
     assignShift: async (req, res) => {
         try {
             const { employeeId, shiftId, date } = req.body;
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
             if (!employeeId || !shiftId) {
                 return res.status(400).json({ success: false, message: 'Missing required fields' });
+            }
+            // Verificar que el empleado pertenece a la farmacia
+            const employee = await server_1.prisma.employees.findFirst({
+                where: {
+                    id: employeeId,
+                    pharmacy_id: pharmacyId
+                }
+            });
+            if (!employee) {
+                return res.status(404).json({ success: false, message: 'Employee not found in this pharmacy' });
+            }
+            // Verificar que el turno pertenece a la farmacia
+            const shift = await server_1.prisma.shifts.findFirst({
+                where: {
+                    id: shiftId,
+                    pharmacy_id: pharmacyId
+                }
+            });
+            if (!shift) {
+                return res.status(404).json({ success: false, message: 'Shift not found in this pharmacy' });
             }
             const data = {
                 employee_id: employeeId,
@@ -229,11 +275,11 @@ exports.employeeController = {
                 }
             }
             else {
-                const employee = await server_1.prisma.employees.update({
+                const updatedEmployee = await server_1.prisma.employees.update({
                     where: { id: employeeId },
                     data: { default_shift_id: shiftId }
                 });
-                return res.json({ success: true, data: employee });
+                return res.json({ success: true, data: updatedEmployee });
             }
             const assignment = await server_1.prisma.shift_assignments.create({ data });
             res.status(201).json({ success: true, data: assignment });
@@ -243,15 +289,47 @@ exports.employeeController = {
             res.status(500).json({ success: false, message: error.message });
         }
     },
-    // ✅ NUEVO MÉTODO: Eliminar asignación de turno específica
     removeShiftAssignment: async (req, res) => {
         try {
             const { employeeId, shiftId, date } = req.body;
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Usuario sin farmacia asignada'
+                });
+            }
             // Validar campos requeridos
             if (!employeeId || !shiftId || !date) {
                 return res.status(400).json({
                     success: false,
                     message: 'Faltan campos requeridos: employeeId, shiftId, date'
+                });
+            }
+            // Verificar que el empleado pertenece a la farmacia
+            const employee = await server_1.prisma.employees.findFirst({
+                where: {
+                    id: employeeId,
+                    pharmacy_id: pharmacyId
+                }
+            });
+            if (!employee) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Empleado no encontrado en esta farmacia'
+                });
+            }
+            // Verificar que el turno pertenece a la farmacia
+            const shift = await server_1.prisma.shifts.findFirst({
+                where: {
+                    id: shiftId,
+                    pharmacy_id: pharmacyId
+                }
+            });
+            if (!shift) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Turno no encontrado en esta farmacia'
                 });
             }
             // Buscar la asignación específica

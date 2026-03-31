@@ -16,7 +16,7 @@ interface AuthRequest extends Request {
 }
 
 export class VentaController {
-  async crear(req: AuthRequest, res: Response) {
+  async crear(req: Request, res: Response) {
     console.log('Payload recibido:', JSON.stringify(req.body, null, 2));
     try {
       const { 
@@ -313,7 +313,7 @@ export class VentaController {
     }
   }
 
-  async obtenerPorId(req: AuthRequest, res: Response) {
+  async obtenerPorId(req: Request, res: Response) {
     try {
       const id = parseInt(req.params.id);
       // Usar pharmacyFilter del middleware para filtrar automáticamente
@@ -350,7 +350,7 @@ export class VentaController {
     }
   }
 
-  async listar(req: AuthRequest, res: Response) {
+  async listar(req: Request, res: Response) {
     try {
       // Usar pharmacyFilter del middleware para filtrar automáticamente
       const pharmacyFilter = req.pharmacyFilter || {};
@@ -439,7 +439,7 @@ export class VentaController {
     }
   }
 
-  async getTodaySales(req: AuthRequest, res: Response) {
+  async getTodaySales(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const today = new Date();
@@ -484,7 +484,7 @@ export class VentaController {
     }
   }
 
-  async getSalesByPeriod(req: AuthRequest, res: Response) {
+  async getSalesByPeriod(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const { period = 'week' } = req.query;

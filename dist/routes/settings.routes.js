@@ -1,0 +1,13 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const settings_controller_1 = require("../controllers/settings.controller");
+const router = (0, express_1.Router)();
+router.get('/profile', settings_controller_1.settingsController.getProfile);
+router.put('/profile', settings_controller_1.settingsController.updateProfile);
+router.put('/change-password', settings_controller_1.settingsController.changePassword);
+router.get('/pharmacy', settings_controller_1.settingsController.getPharmacySettings);
+router.put('/pharmacy', settings_controller_1.settingsController.updatePharmacySettings);
+router.get('/loyalty', settings_controller_1.settingsController.getLoyaltySettings);
+router.put('/loyalty', settings_controller_1.settingsController.updateLoyaltySettings);
+exports.default = router;

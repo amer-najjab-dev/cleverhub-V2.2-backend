@@ -5,7 +5,15 @@ const loyaltyConfig_service_1 = require("../services/loyaltyConfig.service");
 class LoyaltyConfigController {
     async getConfig(req, res) {
         try {
-            const config = await loyaltyConfig_service_1.loyaltyConfigService.getActiveConfig();
+            // Obtener pharmacyId del usuario autenticado
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Usuario sin farmacia asignada'
+                });
+            }
+            const config = await loyaltyConfig_service_1.loyaltyConfigService.getConfig(pharmacyId);
             res.json({ success: true, data: config });
         }
         catch (error) {
@@ -15,7 +23,15 @@ class LoyaltyConfigController {
     }
     async updateConfig(req, res) {
         try {
-            const config = await loyaltyConfig_service_1.loyaltyConfigService.updateConfig(req.body);
+            // Obtener pharmacyId del usuario autenticado
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Usuario sin farmacia asignada'
+                });
+            }
+            const config = await loyaltyConfig_service_1.loyaltyConfigService.updateConfig(pharmacyId, req.body);
             res.json({ success: true, data: config });
         }
         catch (error) {
@@ -25,7 +41,15 @@ class LoyaltyConfigController {
     }
     async getStatistics(req, res) {
         try {
-            const stats = await loyaltyConfig_service_1.loyaltyConfigService.getPointsStatistics();
+            // Obtener pharmacyId del usuario autenticado
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Usuario sin farmacia asignada'
+                });
+            }
+            const stats = await loyaltyConfig_service_1.loyaltyConfigService.getStats(pharmacyId);
             res.json({ success: true, data: stats });
         }
         catch (error) {
@@ -35,8 +59,22 @@ class LoyaltyConfigController {
     }
     async simulatePoints(req, res) {
         try {
+            // Obtener pharmacyId del usuario autenticado
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Usuario sin farmacia asignada'
+                });
+            }
             const { amount, isFirstPurchase, isBirthday } = req.query;
-            const result = loyaltyConfig_service_1.loyaltyConfigService.simulatePoints(parseFloat(amount) || 0, isFirstPurchase === 'true', isBirthday === 'true');
+            const config = await loyaltyConfig_service_1.loyaltyConfigService.getConfig(pharmacyId);
+            const pointsEarned = Math.floor((parseFloat(amount) || 0) / config.currencyUnit) * config.pointsPerUnit;
+            const result = {
+                pointsEarned,
+                multiplier: 1,
+                totalPoints: pointsEarned
+            };
             res.json({ success: true, data: result });
         }
         catch (error) {
@@ -46,7 +84,15 @@ class LoyaltyConfigController {
     }
     async resetToDefault(req, res) {
         try {
-            const config = await loyaltyConfig_service_1.loyaltyConfigService.updateConfig({
+            // Obtener pharmacyId del usuario autenticado
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Usuario sin farmacia asignada'
+                });
+            }
+            const config = await loyaltyConfig_service_1.loyaltyConfigService.updateConfig(pharmacyId, {
                 pointsPerUnit: 1,
                 currencyUnit: 10,
                 minPurchaseForPoints: 0,
@@ -55,9 +101,9 @@ class LoyaltyConfigController {
                 birthdayMultiplier: 2.0,
                 firstPurchaseMultiplier: 1.5,
                 tierThresholds: {
-                    bronze: { min: 0, max: 1999 },
-                    argent: { min: 2000, max: 4999 },
-                    or: { min: 5000, max: 999999 }
+                    bronze: 0,
+                    silver: 2000,
+                    gold: 5000
                 }
             });
             res.json({ success: true, data: config });

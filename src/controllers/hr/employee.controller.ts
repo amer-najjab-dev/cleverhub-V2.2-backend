@@ -8,7 +8,7 @@ interface AuthRequest extends Request {
     id: number;
     email: string;
     role: string;
-    pharmacyId: number;
+    pharmacyId: number | null;
   };
 }
 

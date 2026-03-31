@@ -18,7 +18,7 @@ router.post('/employees', (0, auth_1.requireRole)(['admin']), employee_controlle
 router.put('/employees/:id', (0, auth_1.requireRole)(['admin']), employee_controller_1.employeeController.update);
 router.delete('/employees/:id', (0, auth_1.requireRole)(['admin']), employee_controller_1.employeeController.delete);
 router.put('/employees/:id/shift', (0, auth_1.requireRole)(['admin']), employee_controller_1.employeeController.assignShift);
-router.put('/shifts/:id/config', (0, auth_1.requireRole)(['admin']), shift_controller_1.shiftController.updateConfig);
+//router.put('/shifts/:id/config', requireRole(['admin']), shiftController.updateConfig);
 router.delete('/shift-assignments', (0, auth_1.requireRole)(['admin']), employee_controller_1.employeeController.removeShiftAssignment);
 // ==================== ASIGNACIONES DE TURNO ====================
 router.get('/shift-assignments', (0, auth_1.requireRole)(['admin']), employee_controller_1.employeeController.getAssignments);

@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../server';
 import { verifyToken, extractToken } from '../utils/jwt';
 
-// Extender el tipo Request para incluir el usuario
+// Extender el tipo Request correctamente
 declare module 'express-serve-static-core' {
   interface Request {
     user?: {
@@ -12,17 +12,18 @@ declare module 'express-serve-static-core' {
       role: string;
       pharmacyId: number | null;
     };
+    pharmacyFilter?: {
+      pharmacy_id?: number;
+    };
   }
 }
+
+// No declarar session aquí porque ya está en express-session
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
     console.log('🔐 [requireAuth] Iniciando autenticación...');
     console.log(`📝 [requireAuth] Método: ${req.method}, Ruta: ${req.path}`);
-    console.log(`📝 [requireAuth] Headers:`, {
-      authorization: req.headers.authorization ? 'Presente' : 'Ausente',
-      cookie: req.headers.cookie ? 'Presente' : 'Ausente'
-    });
     
     // Primero intentar con JWT
     const token = extractToken(req);
@@ -38,27 +39,25 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
           pharmacyId: payload.pharmacyId
         });
         
-        if (payload) {
-          // Verificar que el usuario aún existe y está activo
-          const user = await prisma.users.findUnique({
-            where: { id: payload.id },
-            select: { id: true, is_active: true, role: true, pharmacy_id: true }
-          });
-          
-          if (!user || !user.is_active) {
-            console.log('❌ [requireAuth] Usuario no existe o está inactivo');
-            return res.status(401).json({ success: false, message: 'Usuario no válido' });
-          }
-          
-          (req as any).user = {
-            id: payload.id,
-            email: payload.email,
-            role: user.role,
-            pharmacyId: user.pharmacy_id
-          };
-          console.log('✅ [requireAuth] Usuario autenticado con JWT');
-          return next();
+        // Verificar que el usuario aún existe y está activo
+        const user = await prisma.users.findUnique({
+          where: { id: payload.id },
+          select: { id: true, is_active: true, role: true, pharmacy_id: true }
+        });
+        
+        if (!user || !user.is_active) {
+          console.log('❌ [requireAuth] Usuario no existe o está inactivo');
+          return res.status(401).json({ success: false, message: 'Usuario no válido' });
         }
+        
+        req.user = {
+          id: payload.id,
+          email: payload.email,
+          role: user.role,
+          pharmacyId: user.pharmacy_id
+        };
+        console.log('✅ [requireAuth] Usuario autenticado con JWT');
+        return next();
       } catch (jwtError) {
         console.error('❌ [requireAuth] Error verificando JWT:', jwtError);
       }
@@ -81,7 +80,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
       });
 
       if (user && user.is_active) {
-        (req as any).user = {
+        req.user = {
           id: user.id,
           email: user.email,
           role: user.role || 'employee',
@@ -113,7 +112,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 export const requireRole = (roles: string[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const user = (req as any).user;
+      const user = req.user;
       
       console.log(`🔐 [requireRole] Verificando rol para usuario:`, { 
         userId: user?.id, 
@@ -152,7 +151,7 @@ export const requireRole = (roles: string[]) => {
 // Middleware para verificar que el usuario tiene una farmacia asignada
 export const requirePharmacy = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     
     if (!user) {
       return res.status(401).json({ 
@@ -188,28 +187,30 @@ export const requirePharmacy = async (req: Request, res: Response, next: NextFun
 
 // Middleware para añadir el filtro de farmacia a las consultas
 export const addPharmacyFilter = (req: Request, res: Response, next: NextFunction) => {
-  const user = (req as any).user;
+  const user = req.user;
   
   if (!user) {
+    console.log('⚠️ [addPharmacyFilter] No hay usuario autenticado');
+    req.pharmacyFilter = {};
     return next();
   }
   
   // SUPER_ADMIN no tiene filtro de farmacia
   if (user.role === 'SUPER_ADMIN') {
     console.log('🔍 [addPharmacyFilter] SUPER_ADMIN - Sin filtro de farmacia');
-    (req as any).pharmacyFilter = {};
+    req.pharmacyFilter = {};
     return next();
   }
   
   // Para ADMIN y EMPLOYEE, añadir filtro por pharmacy_id
   if (user.pharmacyId) {
     console.log(`🔍 [addPharmacyFilter] Añadiendo filtro para pharmacy_id: ${user.pharmacyId}`);
-    (req as any).pharmacyFilter = {
+    req.pharmacyFilter = {
       pharmacy_id: user.pharmacyId
     };
   } else {
     console.log('⚠️ [addPharmacyFilter] Usuario sin pharmacy_id');
-    (req as any).pharmacyFilter = {};
+    req.pharmacyFilter = {};
   }
   
   next();

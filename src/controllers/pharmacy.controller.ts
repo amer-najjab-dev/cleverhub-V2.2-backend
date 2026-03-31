@@ -5,7 +5,7 @@ import { AuthRequest } from '../middleware/rbac';
 
 export const pharmacyController = {
   // Obtener todas las farmacias (solo SUPER_ADMIN)
-  getAll: async (req: AuthRequest, res: Response) => {
+  getAll: async (req: Request, res: Response) => {
     try {
       const pharmacies = await prisma.pharmacy.findMany({
         include: {
@@ -23,7 +23,7 @@ export const pharmacyController = {
   },
 
   // Crear nueva farmacia (solo SUPER_ADMIN)
-  create: async (req: AuthRequest, res: Response) => {
+  create: async (req: Request, res: Response) => {
     try {
       const { name, license, address, phone, email } = req.body;
       
@@ -46,7 +46,7 @@ export const pharmacyController = {
   },
 
   // Actualizar farmacia
-  update: async (req: AuthRequest, res: Response) => {
+  update: async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const { name, license, address, phone, email, is_active } = req.body;
@@ -64,7 +64,7 @@ export const pharmacyController = {
   },
 
   // Eliminar farmacia (solo SUPER_ADMIN)
-  delete: async (req: AuthRequest, res: Response) => {
+  delete: async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       
@@ -80,7 +80,7 @@ export const pharmacyController = {
   },
 
   // Obtener una farmacia por ID
-  getById: async (req: AuthRequest, res: Response) => {
+  getById: async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       

@@ -1,14 +1,17 @@
+// src/routes/stock.routes.ts
 import { Router } from 'express';
+import { requireRole } from '../middleware/auth';
 import { stockController } from '../controllers/stock.controller';
 
 const router = Router();
 
-router.get('/', stockController.getAll);
-router.get('/low-stock', stockController.getLowStock);
-router.get('/expiring', stockController.getExpiringProducts);
-router.post('/movements', stockController.createMovement);
-router.get('/movements', stockController.getMovements);
-router.put('/adjust/:id', stockController.adjustStock);
-router.get('/product/:productId', stockController.getByProduct);
+// Todas las rutas requieren rol ADMIN
+router.get('/', requireRole(['ADMIN']), stockController.getAll);
+router.get('/low-stock', requireRole(['ADMIN']), stockController.getLowStock);
+router.get('/expiring', requireRole(['ADMIN']), stockController.getExpiringProducts);
+router.get('/movements', requireRole(['ADMIN']), stockController.getMovements);
+router.post('/movements', requireRole(['ADMIN']), stockController.createMovement);
+router.get('/product/:productId', requireRole(['ADMIN']), stockController.getByProduct);
+router.put('/adjust/:id', requireRole(['ADMIN']), stockController.adjustStock);
 
 export default router;

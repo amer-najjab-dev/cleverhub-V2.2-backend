@@ -19,7 +19,7 @@ export class UserController {
   // MÉTODOS PARA EMPLEADOS (ADMIN y EMPLOYEE)
   // ==========================================
   
-  async getAll(req: AuthRequest, res: Response) {
+  async getAll(req: Request, res: Response) {
     try {
       const pharmacyId = req.user?.pharmacyId;
       const userRole = req.user?.role;
@@ -62,7 +62,7 @@ export class UserController {
     }
   }
 
-  async getById(req: AuthRequest, res: Response) {
+  async getById(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const pharmacyId = req.user?.pharmacyId;
@@ -118,7 +118,7 @@ export class UserController {
     }
   }
 
-  async create(req: AuthRequest, res: Response) {
+  async create(req: Request, res: Response) {
     try {
       const { email, password, full_name, role = 'employee' } = req.body;
       const pharmacyId = req.user?.pharmacyId;
@@ -191,7 +191,7 @@ export class UserController {
     }
   }
 
-  async update(req: AuthRequest, res: Response) {
+  async update(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const { email, full_name, role, is_active } = req.body;
@@ -246,7 +246,7 @@ export class UserController {
     }
   }
 
-  async delete(req: AuthRequest, res: Response) {
+  async delete(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const pharmacyId = req.user?.pharmacyId;
@@ -311,7 +311,7 @@ export class UserController {
     }
   }
 
-  async updateProfile(req: AuthRequest, res: Response) {
+  async updateProfile(req: Request, res: Response) {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -345,7 +345,7 @@ export class UserController {
     }
   }
 
-  async changePassword(req: AuthRequest, res: Response) {
+  async changePassword(req: Request, res: Response) {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -388,7 +388,7 @@ export class UserController {
   // ==========================================
   
   // Obtener todos los usuarios con detalles de farmacia
-  async getAllUsers(req: AuthRequest, res: Response) {
+  async getAllUsers(req: Request, res: Response) {
     try {
       const users = await prisma.users.findMany({
         include: {
@@ -409,7 +409,7 @@ export class UserController {
   }
 
   // Obtener usuario por ID con detalles completos
-  async getUserById(req: AuthRequest, res: Response) {
+  async getUserById(req: Request, res: Response) {
     try {
       const { id } = req.params;
       
@@ -453,7 +453,7 @@ export class UserController {
   }
 
   // Crear usuario con farmacia asignada
-  async createUser(req: AuthRequest, res: Response) {
+  async createUser(req: Request, res: Response) {
     try {
       const { email, full_name, role, pharmacy_id, password } = req.body;
       
@@ -491,7 +491,7 @@ export class UserController {
   }
 
   // Actualizar usuario (versión SUPER_ADMIN)
-  async updateUser(req: AuthRequest, res: Response) {
+  async updateUser(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const { email, full_name, role, pharmacy_id, is_active } = req.body;
@@ -539,7 +539,7 @@ export class UserController {
   }
 
   // Eliminar usuario (versión SUPER_ADMIN)
-  async deleteUser(req: AuthRequest, res: Response) {
+  async deleteUser(req: Request, res: Response) {
     try {
       const { id } = req.params;
       
@@ -596,7 +596,7 @@ export class UserController {
   }
 
   // Obtener estadísticas de usuarios por farmacia
-  async getUserStats(req: AuthRequest, res: Response) {
+  async getUserStats(req: Request, res: Response) {
     try {
       const stats = await prisma.users.groupBy({
         by: ['role', 'pharmacy_id'],

@@ -3,44 +3,38 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.campaignController = exports.CampaignController = void 0;
 const server_1 = require("../server");
 const campaignSegmentation_service_1 = require("../services/campaignSegmentation.service");
-const aiMessageGenerator_service_1 = require("../services/aiMessageGenerator.service");
 const whatsapp_service_1 = require("../services/whatsapp.service");
 class CampaignController {
     // ========== PLANTILLAS ==========
     async getTemplates(req, res) {
         try {
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
             const templates = await server_1.prisma.message_templates.findMany({
                 where: {
                     status: 'active',
+                    pharmacy_id: pharmacyId,
                 },
                 orderBy: {
                     created_at: 'desc',
                 },
             });
-            res.json({
-                success: true,
-                data: templates.map((t) => ({
-                    id: t.id,
-                    name: t.name,
-                    content: t.content,
-                    variables: t.variables,
-                    category: t.category,
-                    createdAt: t.created_at,
-                })),
-            });
+            res.json({ success: true, data: templates });
         }
         catch (error) {
-            console.error('Error getting templates:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
     async createTemplate(req, res) {
         try {
             const { name, content, variables, category } = req.body;
-            const userId = req.session?.userId;
+            const userId = req.user?.id;
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
             const template = await server_1.prisma.message_templates.create({
                 data: {
                     name,
@@ -49,202 +43,400 @@ class CampaignController {
                     category,
                     status: 'active',
                     created_by: userId,
+                    pharmacy_id: pharmacyId,
                 },
             });
-            res.json({
-                success: true,
-                data: template,
-            });
+            res.status(201).json({ success: true, data: template });
         }
         catch (error) {
-            console.error('Error creating template:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message,
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+    async updateTemplate(req, res) {
+        try {
+            const { id } = req.params;
+            const { name, content, variables, category, status } = req.body;
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
+            // Verificar que la plantilla pertenece a la farmacia
+            const existingTemplate = await server_1.prisma.message_templates.findFirst({
+                where: {
+                    id: parseInt(id),
+                    pharmacy_id: pharmacyId,
+                },
             });
+            if (!existingTemplate) {
+                return res.status(404).json({ success: false, message: 'Plantilla no encontrada' });
+            }
+            const template = await server_1.prisma.message_templates.update({
+                where: { id: parseInt(id) },
+                data: {
+                    name,
+                    content,
+                    variables: variables || undefined,
+                    category,
+                    status,
+                },
+            });
+            res.json({ success: true, data: template });
+        }
+        catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+    async deleteTemplate(req, res) {
+        try {
+            const { id } = req.params;
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
+            // Verificar que la plantilla pertenece a la farmacia
+            const template = await server_1.prisma.message_templates.findFirst({
+                where: {
+                    id: parseInt(id),
+                    pharmacy_id: pharmacyId,
+                },
+            });
+            if (!template) {
+                return res.status(404).json({ success: false, message: 'Plantilla no encontrada' });
+            }
+            // Soft delete: cambiar estado a inactive
+            await server_1.prisma.message_templates.update({
+                where: { id: parseInt(id) },
+                data: { status: 'inactive' },
+            });
+            res.json({ success: true, message: 'Plantilla eliminada correctamente' });
+        }
+        catch (error) {
+            res.status(500).json({ success: false, message: error.message });
         }
     }
     // ========== CAMPAÑAS ==========
     async getCampaigns(req, res) {
         try {
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
             const campaigns = await server_1.prisma.message_campaigns.findMany({
+                where: {
+                    pharmacy_id: pharmacyId,
+                },
                 include: {
                     template: true,
                     _count: {
-                        select: { recipients: true },
-                    },
+                        select: { recipients: true }
+                    }
                 },
                 orderBy: {
                     created_at: 'desc',
                 },
             });
-            res.json({
-                success: true,
-                data: campaigns.map((c) => ({
-                    id: c.id,
-                    name: c.name,
-                    templateName: c.template?.name,
-                    segments: c.segments,
-                    totalRecipients: c.total_recipients,
-                    status: c.status,
-                    scheduledFor: c.scheduled_for,
-                    sentAt: c.sent_at,
-                    stats: {
-                        sent: c.sent_count || 0,
-                        delivered: c.delivered_count || 0,
-                        read: c.read_count || 0,
-                        converted: c.conversion_count || 0,
-                    },
-                    createdAt: c.created_at,
-                })),
-            });
+            res.json({ success: true, data: campaigns });
         }
         catch (error) {
-            console.error('Error getting campaigns:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
     async createCampaign(req, res) {
         try {
             const { name, templateId, segments, scheduledFor } = req.body;
-            const userId = req.session?.userId;
-            // Obtener clientes según segmentos
-            const recipients = await campaignSegmentation_service_1.campaignSegmentationService.getClientsBySegments(segments);
-            // Generar mensajes personalizados
-            const template = await server_1.prisma.message_templates.findUnique({
-                where: { id: templateId },
-            });
-            if (!template) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Template non trouvé',
-                });
+            const userId = req.user?.id;
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
             }
+            // Verificar que la plantilla existe y pertenece a la farmacia
+            if (templateId) {
+                const template = await server_1.prisma.message_templates.findFirst({
+                    where: {
+                        id: templateId,
+                        pharmacy_id: pharmacyId,
+                    },
+                });
+                if (!template) {
+                    return res.status(404).json({ success: false, message: 'Plantilla no encontrada' });
+                }
+            }
+            // Obtener destinatarios basados en segmentos
+            const recipients = await campaignSegmentation_service_1.campaignSegmentationService.getClientsBySegments(segments);
             const campaign = await server_1.prisma.message_campaigns.create({
                 data: {
                     name,
-                    template_id: templateId,
+                    template_id: templateId || null,
                     segments,
                     total_recipients: recipients.length,
                     status: scheduledFor ? 'scheduled' : 'draft',
                     scheduled_for: scheduledFor ? new Date(scheduledFor) : null,
                     created_by: userId,
+                    pharmacy_id: pharmacyId,
                 },
             });
-            // Crear recipients
+            // Crear registros de destinatarios
             for (const recipient of recipients) {
-                const personalizedMessage = aiMessageGenerator_service_1.aiMessageGeneratorService.personalizeMessage(template.content, recipient, template.variables || {});
                 await server_1.prisma.message_recipients.create({
                     data: {
+                        client_id: recipient.client_id,
                         campaign_id: campaign.id,
-                        client_id: recipient.id,
                         phone: recipient.phone,
-                        message: personalizedMessage,
                         status: 'pending',
                     },
                 });
             }
-            res.json({
-                success: true,
-                data: campaign,
-            });
+            res.status(201).json({ success: true, data: campaign });
         }
         catch (error) {
             console.error('Error creating campaign:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
     async sendCampaign(req, res) {
         try {
             const { id } = req.params;
-            const campaign = await server_1.prisma.message_campaigns.findUnique({
-                where: { id: parseInt(id) },
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
+            const campaign = await server_1.prisma.message_campaigns.findFirst({
+                where: {
+                    id: parseInt(id),
+                    pharmacy_id: pharmacyId,
+                },
                 include: {
-                    recipients: true,
+                    template: true,
+                    recipients: {
+                        where: { status: 'pending' }
+                    }
                 },
             });
             if (!campaign) {
-                return res.status(404).json({
+                return res.status(404).json({ success: false, message: 'Campaña no encontrada' });
+            }
+            // Validar que la plantilla existe
+            if (!campaign.template) {
+                return res.status(400).json({
                     success: false,
-                    message: 'Campagne non trouvée',
+                    message: 'La campaña no tiene una plantilla asociada. Por favor, asigna una plantilla antes de enviar.'
                 });
             }
+            // Validar que el contenido de la plantilla no esté vacío
+            if (!campaign.template.content || campaign.template.content.trim() === '') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'La plantilla asociada no tiene contenido. Por favor, edita la plantilla.'
+                });
+            }
+            // Validar que hay destinatarios pendientes
+            if (!campaign.recipients || campaign.recipients.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No hay destinatarios pendientes para esta campaña.'
+                });
+            }
+            let sentCount = 0;
+            let failedCount = 0;
             // Enviar mensajes
-            const results = await whatsapp_service_1.whatsappService.sendBulkMessages(campaign.recipients.map((r) => ({
-                to: r.phone,
-                body: r.message,
-            })));
-            // Actualizar estado
-            await server_1.prisma.message_campaigns.update({
-                where: { id: campaign.id },
+            for (const recipient of campaign.recipients) {
+                try {
+                    // Reemplazar variables en el contenido si es necesario
+                    let messageContent = campaign.template.content;
+                    // Si hay variables definidas en la plantilla, reemplazar con datos del cliente
+                    if (campaign.template.variables && recipient.client_id) {
+                        const client = await server_1.prisma.clients.findUnique({
+                            where: { id: recipient.client_id },
+                            select: { first_name: true, last_name: true }
+                        });
+                        if (client) {
+                            messageContent = messageContent
+                                .replace(/{{nombre}}/g, client.first_name)
+                                .replace(/{{apellido}}/g, client.last_name)
+                                .replace(/{{nombre_completo}}/g, `${client.first_name} ${client.last_name}`);
+                        }
+                    }
+                    if (!recipient.phone) {
+                        console.log(`⚠️ Destinatario ${recipient.id} no tiene teléfono, omitiendo`);
+                        continue;
+                    }
+                    await whatsapp_service_1.whatsappService.sendMessage({
+                        to: recipient.phone, // Ahora TypeScript sabe que no es null
+                        body: messageContent
+                    });
+                    // Opción 2: Si sendMessage espera solo content (usar para broadcast)
+                    // await whatsappService.sendMessage(messageContent);
+                    // Actualizar estado del destinatario
+                    await server_1.prisma.message_recipients.update({
+                        where: { id: recipient.id },
+                        data: {
+                            status: 'sent',
+                            sent_at: new Date(),
+                            message: messageContent
+                        }
+                    });
+                    sentCount++;
+                    // Pequeña pausa para evitar rate limiting (opcional)
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                catch (error) {
+                    console.error(`Error sending to ${recipient.phone}:`, error);
+                    failedCount++;
+                    await server_1.prisma.message_recipients.update({
+                        where: { id: recipient.id },
+                        data: { status: 'failed' }
+                    });
+                }
+            }
+            // Actualizar la campaña
+            const updatedCampaign = await server_1.prisma.message_campaigns.update({
+                where: { id: parseInt(id) },
                 data: {
                     status: 'sent',
                     sent_at: new Date(),
-                    sent_count: results.filter((r) => r.success).length,
-                },
+                    sent_count: sentCount
+                }
             });
             res.json({
                 success: true,
-                data: results,
+                message: 'Campaña enviada',
+                data: {
+                    total: campaign.recipients.length,
+                    sent: sentCount,
+                    failed: failedCount
+                }
             });
         }
         catch (error) {
             console.error('Error sending campaign:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
-    // ========== ESTADÍSTICAS ==========
     async getCampaignStats(req, res) {
         try {
             const { id } = req.params;
-            const campaign = await server_1.prisma.message_campaigns.findUnique({
-                where: { id: parseInt(id) },
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
+            const campaign = await server_1.prisma.message_campaigns.findFirst({
+                where: {
+                    id: parseInt(id),
+                    pharmacy_id: pharmacyId,
+                },
                 include: {
                     recipients: true,
+                    template: true
+                }
+            });
+            if (!campaign) {
+                return res.status(404).json({ success: false, message: 'Campaña no encontrada' });
+            }
+            const stats = {
+                id: campaign.id,
+                name: campaign.name,
+                status: campaign.status,
+                total: campaign.recipients.length,
+                sent: campaign.recipients.filter(r => r.status === 'sent').length,
+                delivered: campaign.recipients.filter(r => r.delivered_at).length,
+                read: campaign.recipients.filter(r => r.read_at).length,
+                converted: campaign.recipients.filter(r => r.converted_at).length,
+                pending: campaign.recipients.filter(r => r.status === 'pending').length,
+                failed: campaign.recipients.filter(r => r.status === 'failed').length,
+                conversionValue: campaign.conversion_value || 0,
+                sentAt: campaign.sent_at,
+                scheduledFor: campaign.scheduled_for,
+            };
+            res.json({ success: true, data: stats });
+        }
+        catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+    async getCampaignRecipients(req, res) {
+        try {
+            const { id } = req.params;
+            const pharmacyId = req.user?.pharmacyId;
+            const { status, limit = 100, offset = 0 } = req.query;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
+            // Verificar que la campaña pertenece a la farmacia
+            const campaign = await server_1.prisma.message_campaigns.findFirst({
+                where: {
+                    id: parseInt(id),
+                    pharmacy_id: pharmacyId,
                 },
             });
             if (!campaign) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Campagne non trouvée',
-                });
+                return res.status(404).json({ success: false, message: 'Campaña no encontrada' });
             }
-            const stats = {
-                total: campaign.total_recipients || 0,
-                sent: campaign.sent_count || 0,
-                delivered: campaign.delivered_count || 0,
-                read: campaign.read_count || 0,
-                converted: campaign.conversion_count || 0,
-                conversionValue: campaign.conversion_value || 0,
-                rates: {
-                    delivery: campaign.sent_count ?
-                        ((campaign.delivered_count || 0) / campaign.sent_count) * 100 : 0,
-                    read: campaign.delivered_count ?
-                        ((campaign.read_count || 0) / campaign.delivered_count) * 100 : 0,
-                    conversion: campaign.sent_count ?
-                        ((campaign.conversion_count || 0) / campaign.sent_count) * 100 : 0,
+            const where = { campaign_id: parseInt(id) };
+            if (status) {
+                where.status = status;
+            }
+            const recipients = await server_1.prisma.message_recipients.findMany({
+                where,
+                include: {
+                    client: {
+                        select: {
+                            first_name: true,
+                            last_name: true,
+                            email: true,
+                            phone: true,
+                        },
+                    },
                 },
-            };
+                orderBy: { created_at: 'desc' },
+                take: Number(limit),
+                skip: Number(offset),
+            });
+            const total = await server_1.prisma.message_recipients.count({ where });
             res.json({
                 success: true,
-                data: stats,
+                data: recipients,
+                meta: {
+                    total,
+                    limit: Number(limit),
+                    offset: Number(offset),
+                },
             });
         }
         catch (error) {
-            console.error('Error getting campaign stats:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message,
+            res.status(500).json({ success: false, message: error.message });
+        }
+    }
+    async deleteCampaign(req, res) {
+        try {
+            const { id } = req.params;
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+            }
+            // Verificar que la campaña pertenece a la farmacia
+            const campaign = await server_1.prisma.message_campaigns.findFirst({
+                where: {
+                    id: parseInt(id),
+                    pharmacy_id: pharmacyId,
+                },
             });
+            if (!campaign) {
+                return res.status(404).json({ success: false, message: 'Campaña no encontrada' });
+            }
+            // No permitir eliminar campañas enviadas
+            if (campaign.status === 'sent') {
+                return res.status(400).json({
+                    success: false,
+                    message: 'No se puede eliminar una campaña que ya ha sido enviada'
+                });
+            }
+            await server_1.prisma.message_campaigns.delete({
+                where: { id: parseInt(id) },
+            });
+            res.json({ success: true, message: 'Campaña eliminada correctamente' });
+        }
+        catch (error) {
+            res.status(500).json({ success: false, message: error.message });
         }
     }
 }

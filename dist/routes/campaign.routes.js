@@ -1,16 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+// src/routes/campaign.routes.ts
 const express_1 = require("express");
 const campaign_controller_1 = require("../controllers/campaign.controller");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
-router.use(auth_1.requireAuth);
-// Rutas de plantillas
-router.get('/templates', (req, res) => campaign_controller_1.campaignController.getTemplates(req, res));
-router.post('/templates', (req, res) => campaign_controller_1.campaignController.createTemplate(req, res));
-// Rutas de campañas
-router.get('/', (req, res) => campaign_controller_1.campaignController.getCampaigns(req, res));
-router.post('/', (req, res) => campaign_controller_1.campaignController.createCampaign(req, res));
-router.post('/:id/send', (req, res) => campaign_controller_1.campaignController.sendCampaign(req, res));
-router.get('/:id/stats', (req, res) => campaign_controller_1.campaignController.getCampaignStats(req, res));
+// Plantillas
+router.get('/templates', (0, auth_1.requireRole)(['ADMIN', 'EMPLOYEE']), campaign_controller_1.campaignController.getTemplates);
+router.post('/templates', (0, auth_1.requireRole)(['ADMIN']), campaign_controller_1.campaignController.createTemplate);
+router.put('/templates/:id', (0, auth_1.requireRole)(['ADMIN']), campaign_controller_1.campaignController.updateTemplate);
+router.delete('/templates/:id', (0, auth_1.requireRole)(['ADMIN']), campaign_controller_1.campaignController.deleteTemplate);
+// Campañas
+router.get('/', (0, auth_1.requireRole)(['ADMIN', 'EMPLOYEE']), campaign_controller_1.campaignController.getCampaigns);
+router.post('/', (0, auth_1.requireRole)(['ADMIN']), campaign_controller_1.campaignController.createCampaign);
+router.post('/:id/send', (0, auth_1.requireRole)(['ADMIN']), campaign_controller_1.campaignController.sendCampaign);
+router.get('/:id/stats', (0, auth_1.requireRole)(['ADMIN', 'EMPLOYEE']), campaign_controller_1.campaignController.getCampaignStats);
+router.get('/:id/recipients', (0, auth_1.requireRole)(['ADMIN', 'EMPLOYEE']), campaign_controller_1.campaignController.getCampaignRecipients);
+router.delete('/:id', (0, auth_1.requireRole)(['ADMIN']), campaign_controller_1.campaignController.deleteCampaign);
 exports.default = router;

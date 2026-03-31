@@ -14,7 +14,7 @@ interface AuthRequest extends Request {
 
 export class LoyaltyConfigController {
   
-  async getConfig(req: AuthRequest, res: Response) {
+  async getConfig(req: Request, res: Response) {
     try {
       // Obtener pharmacyId del usuario autenticado
       const pharmacyId = req.user?.pharmacyId;
@@ -34,7 +34,7 @@ export class LoyaltyConfigController {
     }
   }
 
-  async updateConfig(req: AuthRequest, res: Response) {
+  async updateConfig(req: Request, res: Response) {
     try {
       // Obtener pharmacyId del usuario autenticado
       const pharmacyId = req.user?.pharmacyId;
@@ -54,7 +54,7 @@ export class LoyaltyConfigController {
     }
   }
 
-  async getStatistics(req: AuthRequest, res: Response) {
+  async getStatistics(req: Request, res: Response) {
     try {
       // Obtener pharmacyId del usuario autenticado
       const pharmacyId = req.user?.pharmacyId;
@@ -74,7 +74,7 @@ export class LoyaltyConfigController {
     }
   }
 
-  async simulatePoints(req: AuthRequest, res: Response) {
+  async simulatePoints(req: Request, res: Response) {
     try {
       // Obtener pharmacyId del usuario autenticado
       const pharmacyId = req.user?.pharmacyId;
@@ -101,7 +101,7 @@ export class LoyaltyConfigController {
     }
   }
 
-  async resetToDefault(req: AuthRequest, res: Response) {
+  async resetToDefault(req: Request, res: Response) {
     try {
       // Obtener pharmacyId del usuario autenticado
       const pharmacyId = req.user?.pharmacyId;

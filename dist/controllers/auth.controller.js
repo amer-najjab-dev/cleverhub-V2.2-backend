@@ -90,7 +90,8 @@ class AuthController {
             const token = (0, jwt_1.generateToken)({
                 id: user.id,
                 email: user.email,
-                role: user.role || 'user'
+                role: user.role,
+                pharmacyId: user.pharmacy_id
             });
             // Mantener sesión por cookie para compatibilidad
             req.session.userId = user.id;

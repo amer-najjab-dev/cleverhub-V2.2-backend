@@ -19,7 +19,7 @@ interface AuthRequest extends Request {
 export class DashboardController {
   
   // Dashboard principal con filtro multi-tenant
-  async getDashboard(req: AuthRequest, res: Response) {
+  async getDashboard(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const isSuperAdmin = req.user?.role === 'SUPER_ADMIN';
@@ -192,7 +192,7 @@ export class DashboardController {
     }
   }
 
-  async getKPIs(req: AuthRequest, res: Response) {
+  async getKPIs(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const { period = 'today' } = req.query;
@@ -299,7 +299,7 @@ export class DashboardController {
     }
   }
 
-  async getHourlySales(req: AuthRequest, res: Response) {
+  async getHourlySales(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const { date } = req.query;
@@ -348,7 +348,7 @@ export class DashboardController {
     }
   }
 
-  async getComparativeData(req: AuthRequest, res: Response) {
+  async getComparativeData(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const now = new Date();
@@ -413,7 +413,7 @@ export class DashboardController {
     }
   }
 
-  async getTopProducts(req: AuthRequest, res: Response) {
+  async getTopProducts(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const limit = Number(req.query.limit) || 10;
@@ -523,7 +523,7 @@ export class DashboardController {
     }
   }
 
-  async getAverageTicket(req: AuthRequest, res: Response) {
+  async getAverageTicket(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const period = (req.query.period as string) || 'week';
@@ -570,7 +570,7 @@ export class DashboardController {
     }
   }
 
-  async getLowStockCount(req: AuthRequest, res: Response) {
+  async getLowStockCount(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const threshold = Number(req.query.threshold) || 10;
@@ -597,7 +597,7 @@ export class DashboardController {
     }
   }
 
-  async getQuickSummary(req: AuthRequest, res: Response) {
+  async getQuickSummary(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       const now = new Date();
@@ -714,7 +714,7 @@ export class DashboardController {
   }
 
   // Nuevo método para obtener estadísticas de stock
-  async getStockStats(req: AuthRequest, res: Response) {
+  async getStockStats(req: Request, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
       

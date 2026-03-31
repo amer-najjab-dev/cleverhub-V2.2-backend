@@ -17,7 +17,7 @@ export class CampaignController {
   
   // ========== PLANTILLAS ==========
   
-  async getTemplates(req: AuthRequest, res: Response) {
+  async getTemplates(req: Request, res: Response) {
     try {
       const pharmacyId = req.user?.pharmacyId;
       
@@ -40,7 +40,7 @@ export class CampaignController {
     }
   }
   
-  async createTemplate(req: AuthRequest, res: Response) {
+  async createTemplate(req: Request, res: Response) {
     try {
       const { name, content, variables, category } = req.body;
       const userId = req.user?.id;
@@ -68,7 +68,7 @@ export class CampaignController {
     }
   }
   
-  async updateTemplate(req: AuthRequest, res: Response) {
+  async updateTemplate(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const { name, content, variables, category, status } = req.body;
@@ -107,7 +107,7 @@ export class CampaignController {
     }
   }
   
-  async deleteTemplate(req: AuthRequest, res: Response) {
+  async deleteTemplate(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const pharmacyId = req.user?.pharmacyId;
@@ -142,7 +142,7 @@ export class CampaignController {
   
   // ========== CAMPAÑAS ==========
   
-  async getCampaigns(req: AuthRequest, res: Response) {
+  async getCampaigns(req: Request, res: Response) {
     try {
       const pharmacyId = req.user?.pharmacyId;
       
@@ -170,7 +170,7 @@ export class CampaignController {
     }
   }
   
-  async createCampaign(req: AuthRequest, res: Response) {
+  async createCampaign(req: Request, res: Response) {
     try {
       const { name, templateId, segments, scheduledFor } = req.body;
       const userId = req.user?.id;
@@ -229,7 +229,7 @@ export class CampaignController {
     }
   }
   
-  async sendCampaign(req: AuthRequest, res: Response) {
+  async sendCampaign(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const pharmacyId = req.user?.pharmacyId;
@@ -366,7 +366,7 @@ export class CampaignController {
     }
   }
   
-  async getCampaignStats(req: AuthRequest, res: Response) {
+  async getCampaignStats(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const pharmacyId = req.user?.pharmacyId;
@@ -412,7 +412,7 @@ export class CampaignController {
     }
   }
   
-  async getCampaignRecipients(req: AuthRequest, res: Response) {
+  async getCampaignRecipients(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const pharmacyId = req.user?.pharmacyId;
@@ -472,7 +472,7 @@ export class CampaignController {
     }
   }
   
-  async deleteCampaign(req: AuthRequest, res: Response) {
+  async deleteCampaign(req: Request, res: Response) {
     try {
       const { id } = req.params;
       const pharmacyId = req.user?.pharmacyId;
