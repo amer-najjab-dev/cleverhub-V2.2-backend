@@ -170,7 +170,7 @@ app.post('/api/auth/logout', authController.logout);
 // Ruta temporal para obtener usuario actual (alternativa)
 app.get('/api/auth/me', requireAuth, async (req: any, res) => {
   try {
-    const userId = req.session.userId;
+    const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ success: false, message: 'No autenticado' });
     }
@@ -198,7 +198,17 @@ app.get('/api/auth/me', requireAuth, async (req: any, res) => {
       return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
     }
     
-    res.json({ success: true, data: user });
+    res.json({ 
+      success: true, 
+      data: {
+        id: user.id,
+        email: user.email,
+        fullName: user.full_name,
+        role: user.role,
+        pharmacyId: user.pharmacy_id,
+        pharmacy: user.pharmacy
+      }
+    });
   } catch (error: any) {
     console.error('Error getting current user:', error);
     res.status(500).json({ success: false, message: error.message });

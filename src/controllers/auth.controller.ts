@@ -121,7 +121,8 @@ export class AuthController {
           id: user.id,
           email: user.email,
           fullName: user.full_name,
-          role: user.role
+          role: user.role,
+          pharmacyId: user.pharmacy_id
         },
         token
       });
