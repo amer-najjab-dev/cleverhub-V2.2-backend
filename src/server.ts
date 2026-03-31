@@ -28,7 +28,7 @@ const isProd = process.env.NODE_ENV === 'production';
 // Pool para sesiones (usa DATABASE_URL directamente)
 const pgPool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: isProd ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false }
 });
 
 // Adapter para Prisma
