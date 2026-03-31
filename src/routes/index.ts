@@ -7,6 +7,12 @@ import { pharmacyController } from '../controllers/pharmacy.controller';
 import { userController } from '../controllers/user.controller';
 import { dashboardController } from '../controllers/dashboard.controller';
 import { supplierController } from '../controllers/supplier.controller';
+import { saleController } from '../controllers/sale.controller';
+import { clientController } from '../controllers/client.controller';
+import { productController } from '../controllers/product.controller';
+import { stockController } from '../controllers/stock.controller';
+import { inventoryController } from '../controllers/inventory.controller';
+import { settingsController } from '../controllers/settings.controller';
 
 // Importaciones de rutas existentes
 import authRoutes from './auth.routes';
@@ -64,7 +70,7 @@ router.get('/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.get
 // RUTAS DASHBOARD - ADMIN y EMPLOYEE
 // ==========================================
 console.log('  📌 Cargando rutas DASHBOARD...');
-router.get('/dashboard', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), dashboardController.getDashboard);
+router.get('/dashboard', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getDashboard);
 router.get('/dashboard/kpis', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getKPIs);
 router.get('/dashboard/hourly-sales', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getHourlySales);
 router.get('/dashboard/comparative', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getComparativeData);
@@ -95,7 +101,7 @@ router.use('/api/stock', requireRole(['ADMIN']), stockRoutes);
 router.use('/api/inventory', requireRole(['ADMIN']), inventoryRoutes);
 
 // Proveedores
-router.use('/api/suppliers', requireRole(['ADMIN', 'EMPLOYEE']), supplierRoutes);
+router.use('/api/suppliers', requireRole(['ADMIN']), supplierRoutes);
 
 // RRHH - Solo ADMIN
 router.use('/api/hr', requireRole(['ADMIN']), hrRoutes);
@@ -122,7 +128,7 @@ router.use('/api/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes)
 router.use('/api/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 
 // ==========================================
-// RUTAS SIN PREFIJO API (Compatibilidad)
+// RUTAS SIN PREFIJO API (Compatibilidad) - SOLO ADMIN
 // ==========================================
 console.log('  📌 Cargando rutas sin prefijo (compatibilidad)...');
 
@@ -135,9 +141,9 @@ router.use('/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
 // Productos
 router.use('/products', requireRole(['ADMIN', 'EMPLOYEE']), productRoutes);
 
-// Proveedores (con endpoints específicos)
-router.get('/suppliers', requireRole(['ADMIN', 'EMPLOYEE']), supplierController.getAll);
-router.get('/suppliers/:id', requireRole(['ADMIN', 'EMPLOYEE']), supplierController.getById);
+// Proveedores - SOLO ADMIN
+router.get('/suppliers', requireRole(['ADMIN']), supplierController.getAll);
+router.get('/suppliers/:id', requireRole(['ADMIN']), supplierController.getById);
 router.post('/suppliers', requireRole(['ADMIN']), supplierController.create);
 router.put('/suppliers/:id', requireRole(['ADMIN']), supplierController.update);
 router.delete('/suppliers/:id', requireRole(['ADMIN']), supplierController.delete);
@@ -149,25 +155,25 @@ router.use('/inventory', requireRole(['ADMIN']), inventoryRoutes);
 // RRHH - Solo ADMIN
 router.use('/hr', requireRole(['ADMIN']), hrRoutes);
 
-// Reportes
+// Reportes - ADMIN y SUPER_ADMIN
 router.use('/reports', requireRole(['ADMIN', 'SUPER_ADMIN']), reportRoutes);
 
-// Configuración
+// Configuración - Solo ADMIN
 router.use('/loyalty', requireRole(['ADMIN']), loyaltyRoutes);
 router.use('/loyalty-rewards', requireRole(['ADMIN']), loyaltyRewardRoutes);
 router.use('/loyalty-checkout', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyCheckoutRoutes);
 router.use('/loyalty-config', requireRole(['ADMIN']), loyaltyConfigRoutes);
 router.use('/settings', requireRole(['ADMIN']), settingsRoutes);
 
-// Campañas
+// Campañas - ADMIN y EMPLOYEE
 router.use('/campaigns', requireRole(['ADMIN', 'EMPLOYEE']), campaignRoutes);
 
-// IA
+// IA - ADMIN y EMPLOYEE
 router.use('/ai/products', requireRole(['ADMIN', 'EMPLOYEE']), productIntelligenceRoutes);
 router.use('/ai/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientIntelligenceRoutes);
 router.use('/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes);
 
-// Usuarios
+// Usuarios - ADMIN y SUPER_ADMIN
 router.use('/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 
 console.log('✅ Todas las rutas cargadas correctamente con RBAC');
