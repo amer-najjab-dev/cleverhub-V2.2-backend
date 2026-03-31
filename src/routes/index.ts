@@ -51,6 +51,46 @@ router.get('/health', (req, res) => {
 });
 
 // ==========================================
+// RUTA PARA OBTENER MÓDULOS POR ROL
+// ==========================================
+router.get('/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async (req: any, res) => {
+  try {
+    const userRole = req.user?.role;
+    
+    const modules = {
+      SUPER_ADMIN: [
+        { name: 'Farmacias', path: '/admin/pharmacies', icon: 'Store' },
+        { name: 'Usuarios Globales', path: '/admin/users', icon: 'Users' },
+        { name: 'Estadísticas Globales', path: '/admin/stats', icon: 'BarChart' }
+      ],
+      ADMIN: [
+        { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
+        { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
+        { name: 'Clientes', path: '/clients', icon: 'Users' },
+        { name: 'Productos', path: '/products', icon: 'Package' },
+        { name: 'Stock', path: '/stock', icon: 'Box' },
+        { name: 'Proveedores', path: '/suppliers', icon: 'Truck' },
+        { name: 'RRHH', path: '/hr', icon: 'Users' },
+        { name: 'Reportes', path: '/reports', icon: 'FileText' },
+        { name: 'Configuración', path: '/settings', icon: 'Settings' }
+      ],
+      EMPLOYEE: [
+        { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
+        { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
+        { name: 'Clientes', path: '/clients', icon: 'Users' },
+        { name: 'Productos', path: '/products', icon: 'Package' }
+      ]
+    };
+    
+    const availableModules = modules[userRole as keyof typeof modules] || [];
+    res.json({ success: true, data: availableModules });
+  } catch (error: any) {
+    console.error('Error getting modules:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==========================================
 // RUTAS SUPER_ADMIN (Solo usuarios con rol SUPER_ADMIN)
 // ==========================================
 console.log('  📌 Cargando rutas SUPER_ADMIN...');
@@ -100,7 +140,7 @@ router.use('/api/stock', requireRole(['ADMIN']), stockRoutes);
 // Inventario - Solo ADMIN
 router.use('/api/inventory', requireRole(['ADMIN']), inventoryRoutes);
 
-// Proveedores
+// Proveedores - Solo ADMIN
 router.use('/api/suppliers', requireRole(['ADMIN']), supplierRoutes);
 
 // RRHH - Solo ADMIN
