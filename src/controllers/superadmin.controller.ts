@@ -20,6 +20,89 @@ const logAdminAction = async (adminId: number, action: any, targetType: string, 
   }
 };
 
+// ==========================================
+// FUNCIÓN INDEPENDIENTE PARA CHECK EXPIRATIONS
+// ==========================================
+async function checkExpirations() {
+  const today = new Date();
+  const days30 = addDays(today, 30);
+  const days7 = addDays(today, 7);
+  
+  // Suscripciones que expiran en 30 días
+  const expiring30 = await prisma.subscription.findMany({
+    where: {
+      end_date: { lte: days30, gt: days7 },
+      status: { in: ['ACTIVE', 'TRIAL', 'GRACE_PERIOD'] }
+    },
+    include: { pharmacy: true }
+  });
+  
+  // Suscripciones que expiran en 7 días
+  const expiring7 = await prisma.subscription.findMany({
+    where: {
+      end_date: { lte: days7, gt: today },
+      status: { in: ['ACTIVE', 'TRIAL', 'GRACE_PERIOD'] }
+    },
+    include: { pharmacy: true }
+  });
+  
+  // Suscripciones expiradas
+  const expired = await prisma.subscription.findMany({
+    where: {
+      end_date: { lt: today },
+      status: { in: ['ACTIVE', 'TRIAL', 'GRACE_PERIOD'] }
+    },
+    include: { pharmacy: true }
+  });
+  
+  // Enviar recordatorios por email (30 días)
+  for (const sub of expiring30) {
+    // TODO: Implementar envío de email
+    if (sub.pharmacy) {
+      console.log(`📧 Recordatorio: ${sub.pharmacy.email} - Licencia expira en 30 días`);
+    }
+  }
+  
+  // Crear notificaciones críticas (7 días)
+  for (const sub of expiring7) {
+    await prisma.systemNotification.create({
+      data: {
+        target: 'SPECIFIC_PHARMACY',
+        pharmacy_id: sub.pharmacy_id,
+        title: '⚠️ Tu licencia expira pronto',
+        message: `Tu licencia expirará el ${sub.end_date.toLocaleDateString()}. Renueva ahora para evitar interrupciones.`,
+        action_url: '/dashboard/subscription/renew',
+        created_by: 1 // SUPER_ADMIN ID
+      }
+    });
+  }
+  
+  // Suspender expiradas
+  for (const sub of expired) {
+    await prisma.subscription.update({
+      where: { id: sub.id },
+      data: { status: 'SUSPENDED' }
+    });
+    
+    await prisma.systemNotification.create({
+      data: {
+        target: 'SPECIFIC_PHARMACY',
+        pharmacy_id: sub.pharmacy_id,
+        title: '❌ Licencia suspendida',
+        message: 'Tu licencia ha expirado. Contacta al administrador para reactivar tu cuenta.',
+        action_url: '/dashboard/subscription/renew',
+        created_by: 1
+      }
+    });
+  }
+  
+  return { 
+    expiring30: expiring30.length, 
+    expiring7: expiring7.length, 
+    expired: expired.length 
+  };
+}
+
 export class SuperAdminController {
   
   // ==========================================
@@ -246,85 +329,6 @@ ${newEndDate.toLocaleDateString()}`,
     }
   }
   
-  // Check expirations (para cron job)
-  async checkExpirations() {
-    const today = new Date();
-    const days30 = addDays(today, 30);
-    const days7 = addDays(today, 7);
-    
-    // Suscripciones que expiran en 30 días
-    const expiring30 = await prisma.subscription.findMany({
-      where: {
-        end_date: { lte: days30, gt: days7 },
-        status: { in: ['ACTIVE', 'TRIAL', 'GRACE_PERIOD'] }
-      },
-      include: { pharmacy: true }
-    });
-    
-    // Suscripciones que expiran en 7 días
-    const expiring7 = await prisma.subscription.findMany({
-      where: {
-        end_date: { lte: days7, gt: today },
-        status: { in: ['ACTIVE', 'TRIAL', 'GRACE_PERIOD'] }
-      },
-      include: { pharmacy: true }
-    });
-    
-    // Suscripciones expiradas
-    const expired = await prisma.subscription.findMany({
-      where: {
-        end_date: { lt: today },
-        status: { in: ['ACTIVE', 'TRIAL', 'GRACE_PERIOD'] }
-      },
-      include: { pharmacy: true }
-    });
-    
-    // Enviar recordatorios por email (30 días)
-    for (const sub of expiring30) {
-      // TODO: Implementar envío de email
-      if (sub.pharmacy) {
-        console.log(`📧 Recordatorio: ${sub.pharmacy.email} - Licencia expira en 30 días`);
-      }
-    }
-    
-    // Crear notificaciones críticas (7 días)
-    for (const sub of expiring7) {
-      await prisma.systemNotification.create({
-        data: {
-          target: 'SPECIFIC_PHARMACY',
-          pharmacy_id: sub.pharmacy_id,
-          title: '⚠️ Tu licencia expira pronto',
-          message: `Tu licencia expirará el ${sub.end_date.toLocaleDateString()}. Renueva ahora para evitar 
-interrupciones.`,
-          action_url: '/dashboard/subscription/renew',
-          created_by: 1 // SUPER_ADMIN ID
-        }
-      });
-    }
-    
-    // Suspender expiradas
-    for (const sub of expired) {
-      await prisma.subscription.update({
-        where: { id: sub.id },
-        data: { status: 'SUSPENDED' }
-      });
-      
-      // Notificar suspensión
-      await prisma.systemNotification.create({
-        data: {
-          target: 'SPECIFIC_PHARMACY',
-          pharmacy_id: sub.pharmacy_id,
-          title: '❌ Licencia suspendida',
-          message: 'Tu licencia ha expirado. Contacta al administrador para reactivar tu cuenta.',
-          action_url: '/dashboard/subscription/renew',
-          created_by: 1
-        }
-      });
-    }
-    
-    return { expiring30: expiring30.length, expiring7: expiring7.length, expired: expired.length };
-  }
-  
   // ==========================================
   // CENTRO DE COMUNICACIÓN
   // ==========================================
@@ -511,37 +515,40 @@ interrupciones.`,
     }
   }
 
-
+  // ==========================================
+  // CRON JOB ENDPOINT
+  // ==========================================
+  
   // Endpoint para cron job (protegido por secret)
   async runExpirationCheck(req: Request, res: Response) {
-  try {
-    const secret = req.query.secret;
-    const CRON_SECRET = process.env.CRON_SECRET;
-    
-    if (!CRON_SECRET) {
-      console.error('❌ CRON_SECRET no configurado');
-      return res.status(500).json({ success: false, message: 'Configuración incorrecta' });
+    try {
+      const secret = req.query.secret;
+      const CRON_SECRET = process.env.CRON_SECRET;
+      
+      if (!CRON_SECRET) {
+        console.error('❌ CRON_SECRET no configurado');
+        return res.status(500).json({ success: false, message: 'Configuración incorrecta' });
+      }
+      
+      if (secret !== CRON_SECRET) {
+        console.error('❌ Intento de acceso no autorizado al cron');
+        return res.status(401).json({ success: false, message: 'No autorizado' });
+      }
+      
+      console.log('🕐 Ejecutando checkExpirations programado...');
+      const result = await checkExpirations(); // ← Llamada directa, sin this
+      console.log('✅ checkExpirations completado:', result);
+      
+      res.json({ 
+        success: true, 
+        data: result,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error('❌ Error en checkExpirations:', error);
+      res.status(500).json({ success: false, message: error.message });
     }
-    
-    if (secret !== CRON_SECRET) {
-      console.error('❌ Intento de acceso no autorizado al cron');
-      return res.status(401).json({ success: false, message: 'No autorizado' });
-    }
-    
-    console.log('🕐 Ejecutando checkExpirations programado...');
-    const result = await this.checkExpirations();
-    console.log('✅ checkExpirations completado:', result);
-    
-    res.json({ 
-      success: true, 
-      data: result,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error: any) {
-    console.error('❌ Error en checkExpirations:', error);
-    res.status(500).json({ success: false, message: error.message });
   }
-}
   
   // ==========================================
   // IMPERSONATE (Shadow Login)
