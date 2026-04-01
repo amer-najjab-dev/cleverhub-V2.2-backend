@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { requireRole } from '../middleware/rbac';
 import { superAdminController } from '../controllers/superadmin.controller';
+import { checkExpirations } from '../controllers/superadmin.controller'; // ← Importar la función independiente
 
 // Importaciones de controladores
 import { pharmacyController } from '../controllers/pharmacy.controller';
@@ -39,7 +40,7 @@ import stockRoutes from './stock.routes';
 import inventoryRoutes from './inventory.routes';
 import settingsRoutes from './settings.routes';
 import superAdminRoutes from './superadmin.routes';
-import { checkExpirations } from '../controllers/superadmin.controller';
+
 const router = Router();
 
 console.log('🔄 Cargando rutas con sistema RBAC multi-tenant...');
@@ -68,7 +69,7 @@ router.get('/admin/cron/check-expirations', async (req, res) => {
       });
     }
     
-    const result = await superAdminController.checkExpirations();
+    const result = await checkExpirations(); // ← Llamada directa a la función
     res.json({ 
       success: true, 
       data: result,
