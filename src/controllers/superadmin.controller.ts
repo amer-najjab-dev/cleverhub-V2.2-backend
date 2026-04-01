@@ -570,7 +570,8 @@ interrupciones.`,
   // UTILS
   // ==========================================
   
-  private async logAdminAction(adminId: number, action: any, targetType: string, targetId: number, details: any) {
+  // Cambiado a arrow function para mantener el contexto this
+  private logAdminAction = async (adminId: number, action: any, targetType: string, targetId: number, details: any) => {
     try {
       await prisma.adminLog.create({
         data: {
@@ -584,7 +585,7 @@ interrupciones.`,
     } catch (error) {
       console.error('Error logging admin action:', error);
     }
-  }
+  };
 }
 
 export const superAdminController = new SuperAdminController();
