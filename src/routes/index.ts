@@ -1,6 +1,7 @@
 // src/routes/index.ts
 import { Router } from 'express';
 import { requireRole } from '../middleware/rbac';
+import { superAdminController } from '../controllers/superadmin.controller';
 
 // Importaciones de controladores
 import { pharmacyController } from '../controllers/pharmacy.controller';
@@ -52,6 +53,35 @@ router.get('/health', (req, res) => {
 });
 
 // ==========================================
+// RUTA PÚBLICA DEL CRON (sin autenticación)
+// ==========================================
+// Esta ruta NO requiere JWT, solo verificación de secret opcional
+router.get('/admin/cron/check-expirations', async (req, res) => {
+  try {
+    // Opcional: Verificar un secret en query params para mayor seguridad
+    const cronSecret = req.query.secret;
+    const expectedSecret = process.env.CRON_SECRET;
+    
+    if (expectedSecret && cronSecret !== expectedSecret) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid cron secret' 
+      });
+    }
+    
+    const result = await superAdminController.checkExpirations();
+    res.json({ 
+      success: true, 
+      data: result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Error in cron job:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==========================================
 // RUTA PARA OBTENER MÓDULOS POR ROL
 // ==========================================
 router.get('/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async (req: any, res) => {
@@ -92,7 +122,7 @@ router.get('/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async 
 });
 
 // ==========================================
-// RUTAS SUPER_ADMIN (Solo usuarios con rol SUPER_ADMIN)
+// RUTAS SUPER_ADMIN (Protegidas)
 // ==========================================
 console.log('  📌 Cargando rutas SUPER_ADMIN...');
 
@@ -106,7 +136,9 @@ router.post('/admin/users', requireRole(['SUPER_ADMIN']), userController.createU
 router.put('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.updateUser);
 router.delete('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.deleteUser);
 router.get('/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
-router.use('/admin', superAdminRoutes);
+
+// Todas las rutas de superadmin (protegidas)
+router.use('/admin', requireRole(['SUPER_ADMIN']), superAdminRoutes);
 
 // ==========================================
 // RUTAS DASHBOARD - ADMIN y EMPLOYEE
