@@ -8,12 +8,12 @@ datasource db {
 }
 
 // ============================================
-// 1. MODELO TENANT (NUEVO)
+// 1. MODELO TENANT
 // ============================================
 model pharmacy {
   id         Int      @id @default(autoincrement())
   name       String   @unique
-  license    String   @unique // Número de licencia oficial
+  license    String   @unique
   address    String?
   phone      String?
   email      String?
@@ -34,19 +34,26 @@ model pharmacy {
   loyalty_config    loyalty_config?
   message_templates message_templates[]
   message_campaigns message_campaigns[]
+  
+  // SAAS
+  subscription_id Int?         @unique
+  subscription    Subscription? @relation(fields: [subscription_id], references: [id])
+  notifications   SystemNotification[]
+
+  // @@map("pharmacies")  // ← COMENTADO TEMPORALMENTE
 }
 
 // ============================================
-// 2. MODELO USERS (MODIFICADO)
+// 2. MODELO USERS
 // ============================================
 model users {
   id          Int     @id @default(autoincrement())
   email       String  @unique
   full_name   String?
   password    String?
-  role        String  @default("EMPLOYEE") // SUPER_ADMIN | ADMIN | EMPLOYEE
+  role        String  @default("EMPLOYEE")
   is_active   Boolean @default(true)
-  pharmacy_id Int? // NULL solo para SUPER_ADMIN
+  pharmacy_id Int?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -58,8 +65,12 @@ model users {
   ai_messages       ai_generated_messages[]
   message_campaigns message_campaigns[]
   message_templates message_templates[]
-  employees         employees? // Un usuario ADMIN/EMPLOYEE puede tener un perfil de empleado
+  employees         employees?
   stock_movements   stock_movements[]
+  
+  // SAAS
+  admin_logs           AdminLog[]           
+  created_notifications SystemNotification[] @relation("creator")
 
   @@map("users")
 }
@@ -70,7 +81,7 @@ model users {
 
 model clients {
   id                 Int       @id @default(autoincrement())
-  pharmacy_id        Int // ← NUEVO CAMPO
+  pharmacy_id        Int
   first_name         String    @map("first_name") @db.VarChar(100)
   last_name          String    @map("last_name") @db.VarChar(100)
   email              String?   @map("email") @db.VarChar(255)
@@ -158,7 +169,7 @@ model products {
 
 model suppliers {
   id                  String    @id @default(cuid()) @db.VarChar(255)
-  pharmacy_id         Int // ← NUEVO CAMPO
+  pharmacy_id         Int
   company_name        String    @db.VarChar(255)
   email               String?   @map("email") @db.VarChar(255)
   website             String?   @db.VarChar(255)
@@ -193,7 +204,7 @@ model session {
 
 model sales {
   id                     Int       @id @default(autoincrement())
-  pharmacy_id            Int // ← NUEVO CAMPO
+  pharmacy_id            Int
   sale_number            String    @unique @map("sale_number") @db.VarChar(50)
   client_id              Int?      @map("client_id")
   user_id                Int       @map("user_id")
@@ -316,7 +327,7 @@ model health_records {
 model inventory_lots {
   id           Int       @id @default(autoincrement())
   product_id   Int       @map("product_id")
-  pharmacy_id  Int // ← NUEVO CAMPO
+  pharmacy_id  Int
   batch_number String    @map("batch_number") @db.VarChar(100)
   expiry_date  DateTime  @db.Date
   quantity     Int
@@ -336,14 +347,14 @@ model inventory_lots {
 model stock_movements {
   id          Int       @id @default(autoincrement())
   product_id  Int       @map("product_id")
-  pharmacy_id Int // ← NUEVO CAMPO
+  pharmacy_id Int
   lot_id      Int?      @map("lot_id")
   type        String    @db.VarChar(20)
   quantity    Int
   stock_after Int
   notes       String?   @map("notes")
   created_at  DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  user_id     Int? // ID del usuario que realizó el movimiento (auditoría)
+  user_id     Int?
 
   product  products        @relation(fields: [product_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
   pharmacy pharmacy        @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
@@ -368,7 +379,7 @@ model price_history {
 
 model message_templates {
   id          Int       @id @default(autoincrement())
-  pharmacy_id Int // ← NUEVO CAMPO
+  pharmacy_id Int
   name        String    @map("name") @db.VarChar(100)
   content     String    @map("content")
   variables   Json?     @map("variables")
@@ -389,7 +400,7 @@ model message_templates {
 
 model message_campaigns {
   id               Int       @id @default(autoincrement())
-  pharmacy_id      Int // ← NUEVO CAMPO
+  pharmacy_id      Int
   name             String    @map("name") @db.VarChar(100)
   template_id      Int?      @map("template_id")
   segments         Json      @map("segments")
@@ -547,7 +558,7 @@ model loyalty_transactions {
 
 model loyalty_config {
   id                        Int       @id @default(autoincrement())
-  pharmacy_id               Int       @unique // Una configuración por farmacia
+  pharmacy_id               Int       @unique
   points_per_unit           Int       @default(1) @map("points_per_unit")
   currency_unit             Int       @default(10) @map("currency_unit")
   min_purchase_for_points   Decimal   @default(0) @map("min_purchase_for_points") @db.Decimal(10, 2)
@@ -641,7 +652,7 @@ model supplier_phones {
 
 model shifts {
   id                     Int      @id @default(autoincrement())
-  pharmacy_id            Int // ← NUEVO CAMPO
+  pharmacy_id            Int
   name                   String
   start_time             String
   end_time               String
@@ -650,12 +661,11 @@ model shifts {
   created_at             DateTime @default(now())
   updated_at             DateTime @default(now())
 
-  // Relaciones
   pharmacy                  pharmacy                    @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
   employees                 employees[]
   shift_assignments         shift_assignments[]
-  pharmacy_configs          pharmacy_configs[] // ← Ya existe
-  pharmacy_config_overrides pharmacy_config_overrides[] // ← Ya existe
+  pharmacy_configs          pharmacy_configs[]
+  pharmacy_config_overrides pharmacy_config_overrides[]
   from_shift_swaps          shift_swap_requests[]       @relation("from_shift")
   to_shift_swaps            shift_swap_requests[]       @relation("to_shift")
   guard_schedules           guard_schedules[]
@@ -666,7 +676,7 @@ model shifts {
 model employees {
   id                 Int      @id @default(autoincrement())
   user_id            Int      @unique
-  pharmacy_id        Int // ← NUEVO CAMPO
+  pharmacy_id        Int
   default_shift_id   Int?
   vacation_days      Float    @default(25)
   vacation_days_used Float    @default(0)
@@ -761,7 +771,7 @@ model pharmacy_config_overrides {
 
 model holidays {
   id           Int      @id @default(autoincrement())
-  pharmacy_id  Int // ← NUEVO CAMPO
+  pharmacy_id  Int
   name         String
   date         DateTime
   is_recurring Boolean  @default(false)
@@ -782,4 +792,130 @@ model guard_schedules {
   updated_at DateTime @default(now())
 
   shift shifts @relation(fields: [shift_id], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// MODELOS SAAS PARA SUPER_ADMIN
+// ==========================================
+
+enum SubscriptionPlan {
+  BASIC
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  GRACE_PERIOD
+  SUSPENDED
+  CANCELLED
+}
+
+model Subscription {
+  id                Int                @id @default(autoincrement())
+  pharmacy_id       Int                @unique
+  plan              SubscriptionPlan   @default(BASIC)
+  status            SubscriptionStatus @default(TRIAL)
+  start_date        DateTime           @default(now())
+  end_date          DateTime
+  next_billing_date DateTime?
+  trial_end_date    DateTime?
+  created_at        DateTime           @default(now())
+  updated_at        DateTime           @updatedAt
+
+  // Relación inversa SIN @relation (Prisma la infiere automáticamente)
+  pharmacy        pharmacy?        // ← IMPORTANTE: sin @relation
+  payments        PaymentLog[]
+  notifications   SystemNotification[]
+
+  @@index([status])
+  @@index([end_date])
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model PaymentLog {
+  id              Int           @id @default(autoincrement())
+  subscription_id Int
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("MAD")
+  payment_method  String
+  status          PaymentStatus @default(PENDING)
+  transaction_id  String?       @unique
+  invoice_url     String?
+  error_message   String?
+  paid_at         DateTime?
+  created_at      DateTime      @default(now())
+
+  subscription    Subscription  @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([created_at])
+}
+
+enum NotificationTarget {
+  ALL
+  SPECIFIC_PHARMACY
+  INACTIVE
+  ACTIVE
+  GRACE_PERIOD
+  SUSPENDED
+}
+
+model SystemNotification {
+  id              Int                @id @default(autoincrement())
+  target          NotificationTarget @default(ALL)
+  pharmacy_id     Int?
+  title           String
+  message         String
+  action_url      String?
+  is_read         Boolean            @default(false)
+  read_by         Json?
+  sent_at         DateTime           @default(now())
+  expires_at      DateTime?
+  created_by      Int
+
+  // Relaciones
+  pharmacy       pharmacy?        @relation(fields: [pharmacy_id], references: [id])
+  subscription   Subscription?    @relation(fields: [subscription_id], references: [id])
+  subscription_id Int?
+  creator        users            @relation("creator", fields: [created_by], references: [id])
+
+  @@index([target])
+  @@index([sent_at])
+  @@index([is_read])
+  @@index([pharmacy_id])
+}
+
+enum AdminActionType {
+  IMPERSONATE
+  EXTEND_COURTESY
+  RENEW_LICENSE
+  SUSPEND_PHARMACY
+  ACTIVATE_PHARMACY
+  SEND_BROADCAST
+  UPDATE_SUBSCRIPTION
+}
+
+model AdminLog {
+  id              Int              @id @default(autoincrement())
+  admin_id        Int
+  action          AdminActionType
+  target_type     String
+  target_id       Int
+  details         Json?
+  ip_address      String?
+  user_agent      String?
+  created_at      DateTime         @default(now())
+
+  admin           users            @relation(fields: [admin_id], references: [id])
+
+  @@index([admin_id])
+  @@index([action])
+  @@index([created_at])
 }
