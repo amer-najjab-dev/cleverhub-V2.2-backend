@@ -3,6 +3,23 @@ import { Request, Response } from 'express';
 import { prisma } from '../server';
 import { addDays, differenceInDays, isBefore, isAfter } from 'date-fns';
 
+// Función auxiliar para logging de acciones de administrador
+const logAdminAction = async (adminId: number, action: any, targetType: string, targetId: number, details: any) => {
+  try {
+    await prisma.adminLog.create({
+      data: {
+        admin_id: adminId,
+        action,
+        target_type: targetType,
+        target_id: targetId,
+        details
+      }
+    });
+  } catch (error) {
+    console.error('Error logging admin action:', error);
+  }
+};
+
 export class SuperAdminController {
   
   // ==========================================
@@ -106,7 +123,7 @@ export class SuperAdminController {
       });
       
       // Registrar en log
-      await this.logAdminAction(
+      await logAdminAction(
         (req as any).user?.id,
         'UPDATE_SUBSCRIPTION',
         'subscription',
@@ -163,7 +180,7 @@ export class SuperAdminController {
       });
       
       // Registrar en log
-      await this.logAdminAction(
+      await logAdminAction(
         (req as any).user?.id,
         'RENEW_LICENSE',
         'subscription',
@@ -202,7 +219,7 @@ export class SuperAdminController {
       });
       
       // Registrar en log
-      await this.logAdminAction(
+      await logAdminAction(
         (req as any).user?.id,
         'EXTEND_COURTESY',
         'subscription',
@@ -398,7 +415,7 @@ interrupciones.`,
       }
       
       // Registrar en log
-      await this.logAdminAction(
+      await logAdminAction(
         adminId,
         'SEND_BROADCAST',
         'notification',
@@ -540,7 +557,7 @@ interrupciones.`,
       );
       
       // Registrar en log de auditoría
-      await this.logAdminAction(
+      await logAdminAction(
         adminId,
         'IMPERSONATE',
         'pharmacy',
@@ -565,27 +582,6 @@ interrupciones.`,
       res.status(500).json({ success: false, message: error.message });
     }
   }
-  
-  // ==========================================
-  // UTILS
-  // ==========================================
-  
-  // Cambiado a arrow function para mantener el contexto this
-  private logAdminAction = async (adminId: number, action: any, targetType: string, targetId: number, details: any) => {
-    try {
-      await prisma.adminLog.create({
-        data: {
-          admin_id: adminId,
-          action,
-          target_type: targetType,
-          target_id: targetId,
-          details
-        }
-      });
-    } catch (error) {
-      console.error('Error logging admin action:', error);
-    }
-  };
 }
 
 export const superAdminController = new SuperAdminController();
