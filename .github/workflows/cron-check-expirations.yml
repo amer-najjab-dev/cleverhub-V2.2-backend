@@ -1,0 +1,16 @@
+name: Check Expirations Cron Job
+
+on:
+  schedule:
+    # Ejecutar todos los días a las 8:00 AM (UTC)
+    - cron: '0 8 * * *'
+  workflow_dispatch:  # Permite ejecutar manualmente desde la interfaz de GitHub
+
+jobs:
+  check-expirations:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Call expiration check endpoint
+        run: |
+          curl -X GET "https://cleverhub-v2-backend-production.up.railway.app/api/admin/cron/check-expirations?secret=${{ secrets.CRON_SECRET }}"
