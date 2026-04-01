@@ -23,7 +23,7 @@ const logAdminAction = async (adminId: number, action: any, targetType: string, 
 // ==========================================
 // FUNCIÓN INDEPENDIENTE PARA CHECK EXPIRATIONS
 // ==========================================
-async function checkExpirations() {
+export async function checkExpirations() {
   const today = new Date();
   const days30 = addDays(today, 30);
   const days7 = addDays(today, 7);
@@ -536,7 +536,7 @@ ${newEndDate.toLocaleDateString()}`,
       }
       
       console.log('🕐 Ejecutando checkExpirations programado...');
-      const result = await checkExpirations(); // ← Llamada directa, sin this
+      const result = await checkExpirations(); // ← Llamada directa a la función
       console.log('✅ checkExpirations completado:', result);
       
       res.json({ 

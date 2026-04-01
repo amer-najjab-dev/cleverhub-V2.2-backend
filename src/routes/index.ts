@@ -39,7 +39,7 @@ import stockRoutes from './stock.routes';
 import inventoryRoutes from './inventory.routes';
 import settingsRoutes from './settings.routes';
 import superAdminRoutes from './superadmin.routes';
-
+import { checkExpirations } from '../controllers/superadmin.controller';
 const router = Router();
 
 console.log('🔄 Cargando rutas con sistema RBAC multi-tenant...');
@@ -56,7 +56,29 @@ router.get('/health', (req, res) => {
 // RUTA PÚBLICA DEL CRON (sin autenticación)
 // ==========================================
 // Esta ruta NO requiere JWT, solo verificación de secret opcional
-
+router.get('/admin/cron/check-expirations', async (req, res) => {
+  try {
+    const cronSecret = req.query.secret;
+    const expectedSecret = process.env.CRON_SECRET;
+    
+    if (expectedSecret && cronSecret !== expectedSecret) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid cron secret' 
+      });
+    }
+    
+    const result = await superAdminController.checkExpirations();
+    res.json({ 
+      success: true, 
+      data: result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Error in cron job:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 // ==========================================
 // RUTA PARA OBTENER MÓDULOS POR ROL
@@ -67,9 +89,13 @@ router.get('/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async 
     
     const modules = {
       SUPER_ADMIN: [
+        { name: 'Dashboard', path: '/admin/dashboard', icon: 'LayoutDashboard' },
         { name: 'Farmacias', path: '/admin/pharmacies', icon: 'Store' },
+        { name: 'Suscripciones', path: '/admin/subscriptions', icon: 'CreditCard' },
         { name: 'Usuarios Globales', path: '/admin/users', icon: 'Users' },
-        { name: 'Estadísticas Globales', path: '/admin/stats', icon: 'BarChart' }
+        { name: 'Comunicación', path: '/admin/broadcast', icon: 'Bell' },
+        { name: 'Semáforo Salud', path: '/admin/health', icon: 'Activity' },
+        { name: 'Auditoría', path: '/admin/logs', icon: 'FileText' }
       ],
       ADMIN: [
         { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
@@ -103,18 +129,45 @@ router.get('/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async 
 // ==========================================
 console.log('  📌 Cargando rutas SUPER_ADMIN...');
 
+// Rutas de gestión de farmacias
 router.get('/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.getAll);
 router.post('/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.create);
 router.put('/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.update);
 router.delete('/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.delete);
+
+// Rutas de gestión de usuarios globales
 router.get('/admin/users', requireRole(['SUPER_ADMIN']), userController.getAllUsers);
 router.get('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.getUserById);
 router.post('/admin/users', requireRole(['SUPER_ADMIN']), userController.createUser);
 router.put('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.updateUser);
 router.delete('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.deleteUser);
+
+// Estadísticas globales
 router.get('/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
 
-// Todas las rutas de superadmin (protegidas)
+// Rutas de semáforo de salud
+router.get('/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
+
+// Rutas de logs de auditoría
+router.get('/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => {
+  try {
+    const { prisma } = await import('../server');
+    const logs = await prisma.adminLog.findMany({
+      include: {
+        admin: {
+          select: { id: true, email: true, full_name: true }
+        }
+      },
+      orderBy: { created_at: 'desc' },
+      take: 100
+    });
+    res.json({ success: true, data: logs });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Todas las rutas de superadmin (suscripciones, broadcast, impersonate)
 router.use('/admin', requireRole(['SUPER_ADMIN']), superAdminRoutes);
 
 // ==========================================
