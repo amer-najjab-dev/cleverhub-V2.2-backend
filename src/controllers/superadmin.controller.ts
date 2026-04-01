@@ -510,6 +510,38 @@ interrupciones.`,
       res.status(500).json({ success: false, message: error.message });
     }
   }
+
+
+  // Endpoint para cron job (protegido por secret)
+  async runExpirationCheck(req: Request, res: Response) {
+  try {
+    const secret = req.query.secret;
+    const CRON_SECRET = process.env.CRON_SECRET;
+    
+    if (!CRON_SECRET) {
+      console.error('❌ CRON_SECRET no configurado');
+      return res.status(500).json({ success: false, message: 'Configuración incorrecta' });
+    }
+    
+    if (secret !== CRON_SECRET) {
+      console.error('❌ Intento de acceso no autorizado al cron');
+      return res.status(401).json({ success: false, message: 'No autorizado' });
+    }
+    
+    console.log('🕐 Ejecutando checkExpirations programado...');
+    const result = await this.checkExpirations();
+    console.log('✅ checkExpirations completado:', result);
+    
+    res.json({ 
+      success: true, 
+      data: result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('❌ Error en checkExpirations:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+}
   
   // ==========================================
   // IMPERSONATE (Shadow Login)

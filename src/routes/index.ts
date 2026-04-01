@@ -56,30 +56,7 @@ router.get('/health', (req, res) => {
 // RUTA PÚBLICA DEL CRON (sin autenticación)
 // ==========================================
 // Esta ruta NO requiere JWT, solo verificación de secret opcional
-router.get('/admin/cron/check-expirations', async (req, res) => {
-  try {
-    // Opcional: Verificar un secret en query params para mayor seguridad
-    const cronSecret = req.query.secret;
-    const expectedSecret = process.env.CRON_SECRET;
-    
-    if (expectedSecret && cronSecret !== expectedSecret) {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Invalid cron secret' 
-      });
-    }
-    
-    const result = await superAdminController.checkExpirations();
-    res.json({ 
-      success: true, 
-      data: result,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error: any) {
-    console.error('Error in cron job:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
+
 
 // ==========================================
 // RUTA PARA OBTENER MÓDULOS POR ROL

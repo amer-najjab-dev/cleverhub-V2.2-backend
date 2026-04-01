@@ -11,6 +11,7 @@ import { addPharmacyFilter } from './middleware/rbac';
 
 // Importar controladores para rutas públicas
 import { authController } from './controllers/auth.controller';
+import { superAdminController } from './controllers/superadmin.controller';
 
 // Extender tipos de sesión
 declare module 'express-session' {
@@ -159,6 +160,7 @@ app.get('/', (req, res) => {
 // Rutas de autenticación (públicas)
 app.post('/api/auth/login', authController.login);
 app.post('/api/auth/logout', authController.logout);
+app.get('/api/admin/cron/check-expirations', superAdminController.runExpirationCheck);
 // app.post('/api/auth/register', authController.register); // Si existe
 // app.post('/api/auth/forgot-password', authController.forgotPassword); // TODO: Implementar
 // app.post('/api/auth/reset-password', authController.resetPassword); // TODO: Implementar
