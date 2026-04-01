@@ -227,7 +227,7 @@ import routes from './routes';
 
 // Aplicar middleware de autenticación a todas las rutas bajo /api
 // El middleware addPharmacyFilter añade el filtro de farmacia automáticamente
-app.use('/api', requireAuth, addPharmacyFilter, routes);
+app.use(requireAuth, addPharmacyFilter, routes);
 
 // ==========================================
 // 7. MANEJADOR DE ERRORES 404
