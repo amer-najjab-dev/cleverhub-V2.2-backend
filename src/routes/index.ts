@@ -96,7 +96,8 @@ router.get('/api/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), as
         { name: 'Usuarios Globales', path: '/admin/users', icon: 'Users' },
         { name: 'Suscripciones', path: '/admin/subscriptions', icon: 'CreditCard' },
         { name: 'Comunicación', path: '/admin/broadcast', icon: 'Bell' },
-        { name: 'Semáforo Salud', path: '/admin/health', icon: 'Activity' }
+        { name: 'Semáforo Salud', path: '/admin/health', icon: 'Activity' },
+        { name: 'Configuración', path: '/settings', icon: 'Settings' }
       ],
       ADMIN: [
         { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
@@ -106,8 +107,7 @@ router.get('/api/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), as
         { name: 'Stock', path: '/stock', icon: 'Box' },
         { name: 'Proveedores', path: '/suppliers', icon: 'Truck' },
         { name: 'RRHH', path: '/hr', icon: 'Users' },
-        { name: 'Reportes', path: '/reports', icon: 'FileText' },
-        { name: 'Configuración', path: '/settings', icon: 'Settings' }
+        { name: 'Reportes', path: '/reports', icon: 'FileText' }
       ],
       EMPLOYEE: [
         { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
@@ -311,12 +311,14 @@ router.use('/hr', requireRole(['ADMIN']), hrRoutes);
 // Reportes - ADMIN y SUPER_ADMIN
 router.use('/reports', requireRole(['ADMIN', 'SUPER_ADMIN']), reportRoutes);
 
-// Configuración - Solo ADMIN
+// Configuración - Solo SUPER_ADMIN
+router.use('/settings', requireRole(['SUPER_ADMIN']), settingsRoutes);
+
+// Lealtad - ADMIN (configuración interna de la farmacia)
 router.use('/loyalty', requireRole(['ADMIN']), loyaltyRoutes);
 router.use('/loyalty-rewards', requireRole(['ADMIN']), loyaltyRewardRoutes);
 router.use('/loyalty-checkout', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyCheckoutRoutes);
 router.use('/loyalty-config', requireRole(['ADMIN']), loyaltyConfigRoutes);
-router.use('/settings', requireRole(['ADMIN']), settingsRoutes);
 
 // Campañas - ADMIN y EMPLOYEE
 router.use('/campaigns', requireRole(['ADMIN', 'EMPLOYEE']), campaignRoutes);
