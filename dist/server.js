@@ -21,7 +21,7 @@ const isProd = process.env.NODE_ENV === 'production';
 // Pool para sesiones (usa DATABASE_URL directamente)
 const pgPool = new pg_1.Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: isProd ? { rejectUnauthorized: false } : false
+    ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false }
 });
 // Adapter para Prisma
 const adapter = new adapter_pg_1.PrismaPg(pgPool);
@@ -147,7 +147,7 @@ app.post('/api/auth/logout', auth_controller_1.authController.logout);
 // Ruta temporal para obtener usuario actual (alternativa)
 app.get('/api/auth/me', auth_1.requireAuth, async (req, res) => {
     try {
-        const userId = req.session.userId;
+        const userId = req.user?.id;
         if (!userId) {
             return res.status(401).json({ success: false, message: 'No autenticado' });
         }
@@ -172,7 +172,17 @@ app.get('/api/auth/me', auth_1.requireAuth, async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
         }
-        res.json({ success: true, data: user });
+        res.json({
+            success: true,
+            data: {
+                id: user.id,
+                email: user.email,
+                fullName: user.full_name,
+                role: user.role,
+                pharmacyId: user.pharmacy_id,
+                pharmacy: user.pharmacy
+            }
+        });
     }
     catch (error) {
         console.error('Error getting current user:', error);

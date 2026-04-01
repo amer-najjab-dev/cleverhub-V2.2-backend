@@ -37,6 +37,7 @@ import campaignRoutes from './campaign.routes';
 import stockRoutes from './stock.routes';
 import inventoryRoutes from './inventory.routes';
 import settingsRoutes from './settings.routes';
+import superAdminRoutes from './superadmin.routes';
 
 const router = Router();
 
@@ -105,6 +106,7 @@ router.post('/admin/users', requireRole(['SUPER_ADMIN']), userController.createU
 router.put('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.updateUser);
 router.delete('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.deleteUser);
 router.get('/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
+router.use('/admin', superAdminRoutes);
 
 // ==========================================
 // RUTAS DASHBOARD - ADMIN y EMPLOYEE
