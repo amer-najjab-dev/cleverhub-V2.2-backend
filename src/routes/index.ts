@@ -131,6 +131,48 @@ router.get('/api/dashboard/comparative', requireRole(['ADMIN', 'EMPLOYEE']), das
 router.get('/api/dashboard/top-products', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getTopProducts);
 
 // ==========================================
+// SUPER_ADMIN ENDPOINTS CON PREFIJO /api/admin
+// ==========================================
+
+// Farmacias
+router.get('/api/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.getAll);
+router.post('/api/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.create);
+router.put('/api/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.update);
+router.delete('/api/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.delete);
+
+// Usuarios globales
+router.get('/api/admin/users', requireRole(['SUPER_ADMIN']), userController.getAllUsers);
+router.get('/api/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.getUserById);
+router.post('/api/admin/users', requireRole(['SUPER_ADMIN']), userController.createUser);
+router.put('/api/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.updateUser);
+router.delete('/api/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.deleteUser);
+
+// Estadísticas globales
+router.get('/api/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
+
+// Semáforo de salud
+router.get('/api/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
+
+// Logs de auditoría
+router.get('/api/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => {
+  try {
+    const { prisma } = await import('../server');
+    const logs = await prisma.adminLog.findMany({
+      include: {
+        admin: {
+          select: { id: true, email: true, full_name: true }
+        }
+      },
+      orderBy: { created_at: 'desc' },
+      take: 100
+    });
+    res.json({ success: true, data: logs });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==========================================
 // RUTAS API CON PREFIJO /api - USAR RUTAS EXISTENTES
 // ==========================================
 
@@ -221,7 +263,7 @@ router.get('/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async 
 });
 
 // ==========================================
-// RUTAS SUPER_ADMIN (Protegidas)
+// RUTAS SUPER_ADMIN (Protegidas) - sin prefijo
 // ==========================================
 console.log('  📌 Cargando rutas SUPER_ADMIN...');
 
