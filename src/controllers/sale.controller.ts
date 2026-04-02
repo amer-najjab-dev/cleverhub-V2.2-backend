@@ -17,6 +17,8 @@ interface AuthRequest extends Request {
 
 export class VentaController {
   async crear(req: Request, res: Response) {
+    console.log('🔵 [crear] req.user:', req.user);
+    console.log('🔵 [crear] pharmacyId:', req.user?.pharmacyId);
     console.log('Payload recibido:', JSON.stringify(req.body, null, 2));
     try {
       const { 
