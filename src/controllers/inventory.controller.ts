@@ -51,6 +51,84 @@ export const inventoryController = {
     }
   },
   
+  // Obtener resumen del inventario
+  getSummary: async (req: AuthRequest, res: Response) => {
+    try {
+      const pharmacyFilter = (req as any).pharmacyFilter || {};
+      
+      // Total de productos (lotes únicos por producto)
+      const totalProducts = await prisma.inventory_lots.groupBy({
+        by: ['product_id'],
+        where: pharmacyFilter,
+        _count: {
+          product_id: true
+        }
+      });
+      
+      // Stock total
+      const totalStock = await prisma.inventory_lots.aggregate({
+        where: pharmacyFilter,
+        _sum: { quantity: true }
+      });
+      
+      // Productos con stock bajo (< 10)
+      const lowStock = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          quantity: { lt: 10 }
+        }
+      });
+      
+      // Productos por vencer (próximos 30 días)
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      
+      const expiringSoon = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          expiry_date: { lte: thirtyDaysFromNow, gt: new Date() }
+        }
+      });
+      
+      // Productos vencidos
+      const expired = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          expiry_date: { lt: new Date() }
+        }
+      });
+      
+      // Valor total del inventario (aproximado)
+      const inventoryValue = await prisma.inventory_lots.findMany({
+        where: pharmacyFilter,
+        include: {
+          product: {
+            select: { pricePPH: true }
+          }
+        }
+      });
+      
+      const totalValue = inventoryValue.reduce((sum, lot) => {
+        const price = Number(lot.product?.pricePPH ?? 0);
+        return sum + (lot.quantity * price);
+      }, 0);
+      
+      res.json({
+        success: true,
+        data: {
+          total_products: totalProducts.length,
+          total_stock: totalStock._sum.quantity || 0,
+          low_stock: lowStock,
+          expiring_soon: expiringSoon,
+          expired: expired,
+          total_value: totalValue
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+  
   // Crear nuevo lote
   createLot: async (req: AuthRequest, res: Response) => {
     try {
