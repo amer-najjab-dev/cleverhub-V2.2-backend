@@ -131,7 +131,7 @@ router.get('/api/dashboard/comparative', requireRole(['ADMIN', 'EMPLOYEE']), das
 router.get('/api/dashboard/top-products', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getTopProducts);
 
 // ==========================================
-// SUPER_ADMIN ENDPOINTS CON PREFIJO /api/admin
+// RUTAS SUPER_ADMIN CON PREFIJO /api
 // ==========================================
 
 // Farmacias
@@ -147,11 +147,20 @@ router.post('/api/admin/users', requireRole(['SUPER_ADMIN']), userController.cre
 router.put('/api/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.updateUser);
 router.delete('/api/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.deleteUser);
 
-// Estadísticas globales
-router.get('/api/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
+// Suscripciones
+router.get('/api/admin/subscriptions', requireRole(['SUPER_ADMIN']), superAdminController.getSubscriptions);
+router.post('/api/admin/subscriptions', requireRole(['SUPER_ADMIN']), superAdminController.createSubscription);
+router.post('/api/admin/subscriptions/extend-courtesy', requireRole(['SUPER_ADMIN']), superAdminController.extendCourtesy);
+router.post('/api/admin/subscriptions/renew', requireRole(['SUPER_ADMIN']), superAdminController.renewLicense);
 
-// Semáforo de salud
+// Health status
 router.get('/api/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
+
+// Broadcast
+router.post('/api/admin/broadcast', requireRole(['SUPER_ADMIN']), superAdminController.sendBroadcast);
+
+// Stats (si se usa)
+router.get('/api/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
 
 // Logs de auditoría
 router.get('/api/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => {
