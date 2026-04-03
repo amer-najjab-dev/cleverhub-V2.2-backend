@@ -61,6 +61,9 @@ export class SupplierController {
     const { name, email, phone, address, city, postalCode, paymentTerms, taxId, notes } = req.body;
     
     const result = await prisma.$transaction(async (tx) => {
+      console.log("🔍 Valor de name:", name);
+      console.log("🔍 Valor de req.body.name:", req.body.name);
+      console.log("🔍 req.body completo:", JSON.stringify(req.body, null, 2));
       const supplier = await tx.suppliers.create({
         data: {
           company_name: name,
