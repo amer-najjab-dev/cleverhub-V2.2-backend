@@ -58,15 +58,15 @@ export class SupplierController {
       return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
     }
     
-    const { name, email, phone, address, city, postalCode, paymentTerms, taxId, notes } = req.body;
+    const { company_name, email, phone, address, city, postalCode, paymentTerms, taxId, notes } = req.body;
     
     const result = await prisma.$transaction(async (tx) => {
-      console.log("🔍 Valor de name:", name);
+      console.log("🔍 Valor de name:", company_name);
       console.log("🔍 Valor de req.body.name:", req.body.name);
       console.log("🔍 req.body completo:", JSON.stringify(req.body, null, 2));
       const supplier = await tx.suppliers.create({
         data: {
-          company_name: name,
+          company_name: company_name,
           pharmacy_id: pharmacyId,
           email: email,
           payment_terms: paymentTerms,
