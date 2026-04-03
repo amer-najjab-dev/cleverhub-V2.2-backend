@@ -52,45 +52,54 @@ export class SupplierController {
 
  async create(req: AuthRequest, res: Response) {
   try {
-    console.log('📦 req.body recibido:', JSON.stringify(req.body, null, 2));
-    
     const pharmacyId = req.user?.pharmacyId;
     
     if (!pharmacyId) {
       return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
     }
     
-    console.log('📦 phone recibido:', req.body.phone);
+    const { name, email, phone, address, city, postalCode, paymentTerms, taxId, notes } = req.body;
     
-    const supplier = await prisma.suppliers.create({
-      data: {
-        company_name: req.body.company_name || req.body.name,
-        pharmacy_id: pharmacyId,
-        email: req.body.email,
-        payment_terms: req.body.payment_terms,
-        tax_id: req.body.tax_id,
-        notes: req.body.notes,
-      }
-    });
-    
-    console.log('📦 supplier creado:', supplier.id);
-    
-    if (req.body.phone) {
-      console.log('📦 guardando teléfono:', req.body.phone);
-      await prisma.supplier_phones.create({
+    const result = await prisma.$transaction(async (tx) => {
+      const supplier = await tx.suppliers.create({
         data: {
-          supplier_id: supplier.id,
-          number: req.body.phone,
-          type: 'order',
-          is_primary: true,
+          company_name: name,
+          pharmacy_id: pharmacyId,
+          email: email,
+          payment_terms: paymentTerms,
+          tax_id: taxId,
+          notes: notes,
         }
       });
-      console.log('✅ teléfono guardado');
-    } else {
-      console.log('⚠️ no hay teléfono para guardar');
-    }
+      
+      if (phone) {
+        await tx.supplier_phones.create({
+          data: {
+            supplier_id: supplier.id,
+            number: phone,
+            type: 'order',
+            is_primary: true,
+          }
+        });
+      }
+      
+      if (address || city) {
+        await tx.supplier_addresses.create({
+          data: {
+            supplier_id: supplier.id,
+            street_name: address || '',
+            city: city || '',
+            postal_code: postalCode,
+            country: 'Maroc',
+            is_primary: true,
+          }
+        });
+      }
+      
+      return supplier;
+    });
     
-    res.status(201).json({ success: true, data: supplier });
+    res.status(201).json({ success: true, data: result });
   } catch (error: any) {
     console.error('Error creating supplier:', error);
     res.status(500).json({ success: false, message: error.message });
