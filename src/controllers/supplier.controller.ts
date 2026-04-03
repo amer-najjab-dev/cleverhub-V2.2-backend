@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../server';
 import { Prisma } from '@prisma/client';
+import { AuthRequest } from '../middleware/rbac';
 
 export class SupplierController {
   
@@ -49,11 +50,20 @@ export class SupplierController {
     }
   }
 
-  async create(req: Request, res: Response) {
+  async create(req: AuthRequest, res: Response) {
     try {
-      // CORREGIDO: Usando SOLO los campos que existen en el modelo
+      const pharmacyId = req.user?.pharmacyId;
+      
+      if (!pharmacyId) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Usuario sin farmacia asignada' 
+        });
+      }
+      
       const data: any = {
         company_name: req.body.name,
+        pharmacy_id: pharmacyId,  // ← AÑADIR ESTO
       };
       
       // Añadir campos opcionales solo si existen
@@ -65,12 +75,7 @@ export class SupplierController {
       if (req.body.registration_number) data.registration_number = req.body.registrationNumber;
       if (req.body.notes) data.notes = req.body.notes;
       
-      // NOTA: El modelo NO tiene contact_person, phone, address
-      // Si necesitas estos campos, deberás agregarlos al modelo primero
-
-      const supplier = await prisma.suppliers.create({
-        data
-      });
+      const supplier = await prisma.suppliers.create({ data });
       
       res.status(201).json({ success: true, data: supplier });
     } catch (error: any) {
