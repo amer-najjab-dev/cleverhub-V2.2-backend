@@ -61,50 +61,23 @@ export class SupplierController {
         });
       }
       
-      // Mapeo camelCase a snake_case
-      const result = await prisma.$transaction(async (tx) => {
-        // 1. Crear proveedor
-        const supplier = await tx.suppliers.create({
-          data: {
-            company_name: req.body.name,
-            pharmacy_id: pharmacyId,
-            email: req.body.email,
-            payment_terms: req.body.paymentTerms,
-            tax_id: req.body.taxId,
-            notes: req.body.notes,
-          }
-        });
-        
-        // 2. Crear teléfono si existe
-        if (req.body.phone) {
-          await tx.supplier_phones.create({
-            data: {
-              supplier_id: supplier.id,
-              number: req.body.phone,
-              type: 'order',
-              is_primary: true,
-            }
-          });
-        }
-        
-        // 3. Crear dirección si existe
-        if (req.body.address || req.body.city) {
-          await tx.supplier_addresses.create({
-            data: {
-              supplier_id: supplier.id,
-              street_name: req.body.address || '',
-              city: req.body.city || '',
-              postal_code: req.body.postalCode,
-              country: 'Maroc',
-              is_primary: true,
-            }
-          });
-        }
-        
-        return supplier;
-      });
+      const data: any = {
+        company_name: req.body.company_name || req.body.name,
+        pharmacy_id: pharmacyId,  // ← AÑADIR ESTO
+      };
       
-      res.status(201).json({ success: true, data: result });
+      // Añadir campos opcionales solo si existen
+      if (req.body.email) data.email = req.body.email;
+      if (req.body.website) data.website = req.body.website;
+      if (req.body.fax) data.fax = req.body.fax;
+      if (req.body.payment_terms) data.payment_terms = req.body.paymentTerms;
+      if (req.body.tax_id) data.tax_id = req.body.taxId;
+      if (req.body.registration_number) data.registration_number = req.body.registrationNumber;
+      if (req.body.notes) data.notes = req.body.notes;
+      
+      const supplier = await prisma.suppliers.create({ data });
+      
+      res.status(201).json({ success: true, data: supplier });
     } catch (error: any) {
       console.error('Error creating supplier:', error);
       res.status(500).json({ success: false, message: error.message });
