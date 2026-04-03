@@ -62,7 +62,7 @@ export class SupplierController {
       }
       
       const data: any = {
-        company_name: req.body.name,
+        company_name: req.body.company_name || req.body.name,
         pharmacy_id: pharmacyId,  // ← AÑADIR ESTO
       };
       
