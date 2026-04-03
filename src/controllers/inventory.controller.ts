@@ -8,15 +8,37 @@ export const inventoryController = {
     try {
       const pharmacyFilter = (req as any).pharmacyFilter || {};
       
+      // Obtener parámetros de paginación
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const skip = (page - 1) * limit;
+      
+      // Obtener total de registros
+      const total = await prisma.inventory_lots.count({
+        where: pharmacyFilter
+      });
+      
+      // Obtener registros paginados
       const inventory = await prisma.inventory_lots.findMany({
         where: pharmacyFilter,
         include: {
           product: true
         },
-        orderBy: { expiry_date: 'asc' }
+        orderBy: { expiry_date: 'asc' },
+        skip: skip,
+        take: limit
       });
       
-      res.json({ success: true, data: inventory });
+      res.json({
+        success: true,
+        data: inventory,
+        meta: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit)
+        }
+      });
     } catch (error: any) {
       res.status(500).json({ success: false, message: error.message });
     }
