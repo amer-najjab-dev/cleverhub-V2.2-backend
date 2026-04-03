@@ -50,15 +50,18 @@ export class SupplierController {
     }
   }
 
-  async create(req: AuthRequest, res: Response) {
+ async create(req: AuthRequest, res: Response) {
   try {
+    console.log('📦 req.body recibido:', JSON.stringify(req.body, null, 2));
+    
     const pharmacyId = req.user?.pharmacyId;
     
     if (!pharmacyId) {
       return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
     }
     
-    // Crear proveedor
+    console.log('📦 phone recibido:', req.body.phone);
+    
     const supplier = await prisma.suppliers.create({
       data: {
         company_name: req.body.company_name || req.body.name,
@@ -70,8 +73,10 @@ export class SupplierController {
       }
     });
     
-    // AÑADIR: Guardar teléfono si existe
+    console.log('📦 supplier creado:', supplier.id);
+    
     if (req.body.phone) {
+      console.log('📦 guardando teléfono:', req.body.phone);
       await prisma.supplier_phones.create({
         data: {
           supplier_id: supplier.id,
@@ -80,6 +85,9 @@ export class SupplierController {
           is_primary: true,
         }
       });
+      console.log('✅ teléfono guardado');
+    } else {
+      console.log('⚠️ no hay teléfono para guardar');
     }
     
     res.status(201).json({ success: true, data: supplier });
