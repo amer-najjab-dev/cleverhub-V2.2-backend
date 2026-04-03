@@ -69,8 +69,8 @@ export class SupplierController {
           company_name: company_name,
           pharmacy_id: pharmacyId,
           email: email,
-          payment_terms: paymentTerms,
-          tax_id: taxId,
+          payment_terms: req.body.payment_terms,
+          tax_id: req.body.tax_id,  
           notes: notes,
         }
       });
