@@ -6,9 +6,16 @@ import { AuthRequest } from '../middleware/rbac';
 
 export class SupplierController {
   
-  async getAll(req: Request, res: Response) {
+  async getAll(req: AuthRequest, res: Response) {
     try {
+      const pharmacyId = req.user?.pharmacyId;
+      
       const suppliers = await prisma.suppliers.findMany({
+        where: pharmacyId ? { pharmacy_id: pharmacyId } : {},
+        include: {
+          supplier_phones: true,
+          supplier_addresses: true
+        },
         orderBy: { company_name: 'asc' }
       });
       res.json({ success: true, data: suppliers });
@@ -21,7 +28,11 @@ export class SupplierController {
     try {
       const { id } = req.params;
       const supplier = await prisma.suppliers.findUnique({
-        where: { id: id }
+        where: { id: id },
+        include: {
+          supplier_phones: true,
+          supplier_addresses: true
+        }
       });
       if (!supplier) {
         return res.status(404).json({ success: false, message: 'Proveedor no encontrado' });
