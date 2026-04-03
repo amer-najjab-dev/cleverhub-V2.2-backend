@@ -11,37 +11,29 @@ export interface AuthRequest extends Request {
 
 export const requireRole = (allowedRoles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    console.log('🔐 [requireRole] Iniciando verificación...');
-    console.log('🔐 [requireRole] req.user:', req.user);
-    console.log('🔐 [requireRole] allowedRoles:', allowedRoles);
-    
     if (!req.user) {
-      console.log('❌ [requireRole] No hay usuario');
       return res.status(401).json({ success: false, message: 'No autenticado' });
     }
     
-    console.log(`🔐 [requireRole] Comparando: ${req.user.role} vs ${allowedRoles}`);
+    // Normalizar a minúsculas para comparación
+    const userRole = req.user.role.toLowerCase();
+    const normalizedAllowed = allowedRoles.map(r => r.toLowerCase());
     
-    if (!allowedRoles.includes(req.user.role)) {
-      console.log(`❌ [requireRole] Rol ${req.user.role} no está permitido`);
+    if (!normalizedAllowed.includes(userRole)) {
       return res.status(403).json({ 
         success: false, 
-        message: `Acceso denegado. Rol ${req.user.role} no tiene permisos para esta acción` 
+        message: `No autorizado. Se requiere uno de estos roles: ${allowedRoles.join(', ')}` 
       });
     }
     
-    console.log('✅ [requireRole] Rol permitido');
-    
     // Para ADMIN y EMPLOYEE, deben tener pharmacy_id
     if (req.user.role !== 'SUPER_ADMIN' && !req.user.pharmacyId) {
-      console.log('❌ [requireRole] Usuario sin farmacia asignada');
       return res.status(403).json({ 
         success: false, 
         message: 'Usuario sin farmacia asignada. Contacte al administrador.' 
       });
     }
     
-    console.log('✅ [requireRole] Verificación completa, acceso permitido');
     next();
   };
 };
