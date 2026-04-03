@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth } from '../middleware/auth';
+import { requireRole } from '../middleware/rbac';
 import { employeeController } from '../controllers/hr/employee.controller';
 import { shiftController } from '../controllers/hr/shift.controller';
 import { timeOffController } from '../controllers/hr/timeoff.controller';

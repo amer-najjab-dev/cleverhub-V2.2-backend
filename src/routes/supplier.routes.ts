@@ -1,7 +1,8 @@
 // src/routes/supplier.routes.ts
 import { Router } from 'express';
 import { supplierController } from '../controllers/supplier.controller';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth } from '../middleware/auth';
+import { requireRole } from '../middleware/rbac';
 
 const router = Router();
 

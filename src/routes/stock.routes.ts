@@ -1,6 +1,6 @@
 // src/routes/stock.routes.ts
 import { Router } from 'express';
-import { requireRole } from '../middleware/auth';
+import { requireRole } from '../middleware/rbac';
 import { stockController } from '../controllers/stock.controller';
 
 const router = Router();

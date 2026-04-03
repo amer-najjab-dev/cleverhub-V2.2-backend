@@ -1,7 +1,7 @@
 // src/routes/campaign.routes.ts
 import { Router } from 'express';
 import { campaignController } from '../controllers/campaign.controller';
-import { requireRole } from '../middleware/auth';
+import { requireRole } from '../middleware/rbac';
 
 const router = Router();
 

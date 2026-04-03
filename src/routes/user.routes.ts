@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { userController } from '../controllers/user.controller';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth } from '../middleware/auth';
+import { requireRole } from '../middleware/rbac';
 
 const router = Router();
 
