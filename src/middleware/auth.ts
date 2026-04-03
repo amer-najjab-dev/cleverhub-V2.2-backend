@@ -109,45 +109,6 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-export const requireRole = (roles: string[]) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const user = req.user;
-      
-      console.log(`🔐 [requireRole] Verificando rol para usuario:`, { 
-        userId: user?.id, 
-        userRole: user?.role,
-        requiredRoles: roles 
-      });
-      
-      if (!user) {
-        console.log('❌ [requireRole] No hay usuario autenticado');
-        return res.status(401).json({ 
-          success: false, 
-          message: 'No autenticado' 
-        });
-      }
-
-      if (!user.role || !roles.includes(user.role)) {
-        console.log(`❌ [requireRole] Rol ${user.role} no autorizado. Roles requeridos: ${roles.join(', ')}`);
-        return res.status(403).json({ 
-          success: false, 
-          message: `No autorizado. Se requiere uno de estos roles: ${roles.join(', ')}` 
-        });
-      }
-
-      console.log(`✅ [requireRole] Rol ${user.role} autorizado`);
-      next();
-    } catch (error) {
-      console.error('❌ [requireRole] Error:', error);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Error de autorización' 
-      });
-    }
-  };
-};
-
 // Middleware para verificar que el usuario tiene una farmacia asignada
 export const requirePharmacy = async (req: Request, res: Response, next: NextFunction) => {
   try {
