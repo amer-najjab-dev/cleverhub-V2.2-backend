@@ -51,38 +51,43 @@ export class SupplierController {
   }
 
   async create(req: AuthRequest, res: Response) {
-    try {
-      const pharmacyId = req.user?.pharmacyId;
-      
-      if (!pharmacyId) {
-        return res.status(403).json({ 
-          success: false, 
-          message: 'Usuario sin farmacia asignada' 
-        });
-      }
-      
-      const data: any = {
-        company_name: req.body.company_name || req.body.name,
-        pharmacy_id: pharmacyId,  // ← AÑADIR ESTO
-      };
-      
-      // Añadir campos opcionales solo si existen
-      if (req.body.email) data.email = req.body.email;
-      if (req.body.website) data.website = req.body.website;
-      if (req.body.fax) data.fax = req.body.fax;
-      if (req.body.payment_terms) data.payment_terms = req.body.paymentTerms;
-      if (req.body.tax_id) data.tax_id = req.body.taxId;
-      if (req.body.registration_number) data.registration_number = req.body.registrationNumber;
-      if (req.body.notes) data.notes = req.body.notes;
-      
-      const supplier = await prisma.suppliers.create({ data });
-      
-      res.status(201).json({ success: true, data: supplier });
-    } catch (error: any) {
-      console.error('Error creating supplier:', error);
-      res.status(500).json({ success: false, message: error.message });
+  try {
+    const pharmacyId = req.user?.pharmacyId;
+    
+    if (!pharmacyId) {
+      return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
     }
+    
+    // Crear proveedor
+    const supplier = await prisma.suppliers.create({
+      data: {
+        company_name: req.body.company_name || req.body.name,
+        pharmacy_id: pharmacyId,
+        email: req.body.email,
+        payment_terms: req.body.payment_terms,
+        tax_id: req.body.tax_id,
+        notes: req.body.notes,
+      }
+    });
+    
+    // AÑADIR: Guardar teléfono si existe
+    if (req.body.phone) {
+      await prisma.supplier_phones.create({
+        data: {
+          supplier_id: supplier.id,
+          number: req.body.phone,
+          type: 'order',
+          is_primary: true,
+        }
+      });
+    }
+    
+    res.status(201).json({ success: true, data: supplier });
+  } catch (error: any) {
+    console.error('Error creating supplier:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
+}
 
   async update(req: Request, res: Response) {
     try {
