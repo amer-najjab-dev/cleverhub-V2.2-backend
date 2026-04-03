@@ -51,7 +51,7 @@ export class SupplierController {
   }
 
  async create(req: AuthRequest, res: Response) {
-  try {
+    console.log("📦 req.body completo:", JSON.stringify(req.body, null, 2));  try {
     const pharmacyId = req.user?.pharmacyId;
     
     if (!pharmacyId) {
