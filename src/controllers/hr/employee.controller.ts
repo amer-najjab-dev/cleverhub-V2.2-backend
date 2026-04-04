@@ -423,26 +423,31 @@ export const employeeController = {
       const start = new Date(`${startDate}T00:00:00Z`);
       const end = new Date(`${endDate}T23:59:59Z`);
 
+      // 1. Eliminar todas las asignaciones existentes en el rango
+      await prisma.shift_assignments.deleteMany({
+        where: {
+          employee_id: employeeId,
+          date: {
+            gte: start,
+            lte: end
+          }
+        }
+      });
+
+      // 2. Crear nuevas asignaciones para cada día del rango
       const assignments = [];
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const existing = await prisma.shift_assignments.findFirst({
-          where: {
+        const currentDate = new Date(d);
+        currentDate.setUTCHours(0, 0, 0, 0);
+        
+        const assignment = await prisma.shift_assignments.create({
+          data: {
             employee_id: employeeId,
             shift_id: shiftId,
-            date: new Date(d.setUTCHours(0, 0, 0, 0))
+            date: currentDate
           }
         });
-
-        if (!existing) {
-          const assignment = await prisma.shift_assignments.create({
-            data: {
-              employee_id: employeeId,
-              shift_id: shiftId,
-              date: new Date(d)
-            }
-          });
-          assignments.push(assignment);
-        }
+        assignments.push(assignment);
       }
 
       res.json({ success: true, data: assignments, count: assignments.length });
