@@ -32,6 +32,7 @@ router.get('/shifts', shiftController.getAll);
 router.post('/shifts', requireRole(['admin']), shiftController.create);
 router.put('/shifts/:id', requireRole(['admin']), shiftController.update);
 router.delete('/shifts/:id', requireRole(['admin']), shiftController.delete);
+router.patch('/shifts/:id/config', requireRole(['admin']), shiftController.updateShiftConfig);
 
 // ==================== SOLICITUDES ====================
 router.get('/time-off-requests', timeOffController.getAll);
