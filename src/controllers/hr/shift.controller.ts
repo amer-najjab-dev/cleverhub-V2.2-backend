@@ -24,7 +24,7 @@ export const shiftController = {
         include: {
           pharmacy_configs: true
         },
-        orderBy: { id: 'asc' }
+        orderBy: { start_time: 'asc' }
       });
       
       const formattedShifts = shifts.map(shift => ({
