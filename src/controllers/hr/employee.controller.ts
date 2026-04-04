@@ -410,7 +410,7 @@ export const employeeController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
-  
+
   assignShiftRange: async (req: AuthRequest, res: Response) => {
     try {
       const { employeeId, shiftId, startDate, endDate } = req.body;
@@ -420,8 +420,8 @@ export const employeeController = {
         return res.status(403).json({ success: false, message: 'Usuario sin farmacia' });
       }
 
-      const start = new Date(startDate);
-      const end = new Date(endDate);
+      const start = new Date(`${startDate}T00:00:00Z`);
+      const end = new Date(`${endDate}T23:59:59Z`);
 
       const assignments = [];
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -429,7 +429,7 @@ export const employeeController = {
           where: {
             employee_id: employeeId,
             shift_id: shiftId,
-            date: new Date(d)
+            date: new Date(d.setUTCHours(0, 0, 0, 0))
           }
         });
 
