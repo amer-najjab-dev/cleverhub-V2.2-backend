@@ -420,8 +420,19 @@ export const employeeController = {
         return res.status(403).json({ success: false, message: 'Usuario sin farmacia' });
       }
 
-      const start = new Date(`${startDate}T00:00:00Z`);
-      const end = new Date(`${endDate}T23:59:59Z`);
+      const start = new Date(Date.UTC(
+        parseInt(startDate.split('-')[0]), 
+        parseInt(startDate.split('-')[1]) - 1, 
+        parseInt(startDate.split('-')[2]), 
+        0, 0, 0
+      ));
+
+      const end = new Date(Date.UTC(
+        parseInt(endDate.split('-')[0]), 
+        parseInt(endDate.split('-')[1]) - 1, 
+        parseInt(endDate.split('-')[2]), 
+        23, 59, 59
+      ));
 
       // 1. Eliminar todas las asignaciones existentes en el rango
       await prisma.shift_assignments.deleteMany({
