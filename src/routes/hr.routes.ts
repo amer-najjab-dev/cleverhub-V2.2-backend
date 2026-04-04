@@ -53,5 +53,6 @@ router.delete('/holidays/:id', requireRole(['admin']), holidayController.delete)
 
 // ==================== COBERTURA ====================
 router.get('/coverage', coverageController.getCoverage);
+router.post('/employees/assign-shift-range', requireRole(['admin']), employeeController.assignShiftRange);
 
 export default router;
