@@ -7,6 +7,7 @@ import { timeOffController } from '../controllers/hr/timeoff.controller';
 import { guardController } from '../controllers/hr/guard.controller';
 import { holidayController } from '../controllers/hr/holiday.controller';
 import { coverageController } from '../controllers/hr/coverage.controller';
+import { shiftAssignmentController } from '../controllers/hr/shiftAssignment.controller';
 
 const router = Router();
 
@@ -26,6 +27,8 @@ router.delete('/shift-assignments', requireRole(['admin']), employeeController.r
 // ==================== ASIGNACIONES DE TURNO ====================
 router.get('/shift-assignments', requireRole(['admin']), employeeController.getAssignments);
 router.post('/shift-assignments', requireRole(['admin']), employeeController.assignShift);
+router.post('/shift-assignments/range', requireRole(['admin']), shiftAssignmentController.assignRange);
+router.get('/shift-assignments/coverage', requireRole(['admin']), shiftAssignmentController.getCoverage);
 
 // ==================== TURNOS ====================
 router.get('/shifts', shiftController.getAll);
