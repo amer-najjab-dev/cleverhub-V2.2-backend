@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { prisma } from '../../server';
-import bcrypt from 'bcrypt';
+import * as bcrypt from 'bcrypt';
 
 // Extender el tipo Request para incluir el usuario autenticado
 interface AuthRequest extends Request {
@@ -79,8 +79,21 @@ export const employeeController = {
   
   create: async (req: AuthRequest, res: Response) => {
     try {
-      const { email, fullName, defaultShiftId, vacationDays, password } = req.body;
-      const pharmacyId = req.user?.pharmacyId;  // ← AÑADE ESTA LÍNEA
+      const { 
+        email, 
+        full_name, 
+        phone, 
+        address, 
+        cni, 
+        birth_date, 
+        marital_status, 
+        children_count, 
+        defaultShiftId, 
+        vacationDays, 
+        password 
+      } = req.body;
+      
+      const pharmacyId = req.user?.pharmacyId;
       
       if (!pharmacyId) {
         return res.status(403).json({ 
@@ -98,28 +111,35 @@ export const employeeController = {
       }
       
       const hashedPassword = await bcrypt.hash(password || 'empleado123', 10);
+      
       const user = await prisma.users.create({
         data: {
           email,
-          full_name: fullName,
+          full_name: full_name,
           password: hashedPassword,
           role: 'employee',
           is_active: true,
-          pharmacy_id: pharmacyId  // ← AÑADE ESTA LÍNEA - Asignar usuario a la farmacia
+          pharmacy_id: pharmacyId
         }
       });
       
       const employee = await prisma.employees.create({
         data: {
-          pharmacy_id: pharmacyId,  // ← AÑADE ESTA LÍNEA - Asignar empleado a la farmacia
+          pharmacy_id: pharmacyId,
           user_id: user.id,
+          phone: phone || null,
+          address: address || null,
+          cni: cni || null,
+          birth_date: birth_date ? new Date(birth_date) : null,
+          marital_status: marital_status || null,
+          children_count: children_count || 0,
           default_shift_id: defaultShiftId || null,
           vacation_days: vacationDays || 25,
-          vacation_days_used: 0
+          vacation_days_used: 0,
+          updated_at: new Date()
         }
       });
       
-      // Obtener el usuario completo para la respuesta
       const userData = await prisma.users.findUnique({
         where: { id: user.id },
         select: { id: true, email: true, full_name: true, role: true, is_active: true }
@@ -210,7 +230,7 @@ export const employeeController = {
       
       const where: any = {
         employee: {
-          pharmacy_id: pharmacyId  // ← FILTRAR POR FARMACIA
+          pharmacy_id: pharmacyId
         }
       };
       

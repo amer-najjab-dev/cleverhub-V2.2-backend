@@ -33,7 +33,7 @@ export const shiftController = {
         start_time: shift.start_time,
         end_time: shift.end_time,
         is_guard: shift.is_guard,
-        min_employees_required: shift.pharmacy_configs?.[0]?.min_employees_required ?? shift.min_employees_required,
+        min_employees_required: shift.min_employees_required,
         created_at: shift.created_at,
         updated_at: shift.updated_at
       }));
@@ -61,7 +61,8 @@ export const shiftController = {
           end_time: endTime,
           is_guard: isGuard || false,
           min_employees_required: minEmployeesRequired || 1,
-          pharmacy_id: pharmacyId
+          pharmacy_id: pharmacyId,
+          updated_at: new Date()
         }
       });
       
