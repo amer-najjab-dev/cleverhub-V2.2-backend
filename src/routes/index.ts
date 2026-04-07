@@ -87,7 +87,7 @@ router.get('/admin/cron/check-expirations', async (req, res) => {
 // Módulos
 router.get('/api/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async (req: any, res) => {
   try {
-    const userRole = req.user?.role;
+    const userRole = req.user?.role?.toUpperCase();
     
     const modules = {
       SUPER_ADMIN: [
@@ -232,7 +232,7 @@ router.use('/api/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 // ==========================================
 router.get('/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async (req: any, res) => {
   try {
-    const userRole = req.user?.role;
+    const userRole = req.user?.role?.toUpperCase();
     
     const modules = {
       SUPER_ADMIN: [
