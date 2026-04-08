@@ -122,22 +122,23 @@ export const shiftController = {
         return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
       }
       
-      const employeesWithShift = await prisma.employees.count({
-        where: { default_shift_id: parseInt(id), pharmacy_id: pharmacyId }
+      // 1. Desasignar empleados que tienen este turno por defecto
+      await prisma.employees.updateMany({
+        where: { default_shift_id: parseInt(id), pharmacy_id: pharmacyId },
+        data: { default_shift_id: null }
       });
       
-      if (employeesWithShift > 0) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'No se puede eliminar el turno porque hay empleados asignados' 
-        });
-      }
+      // 2. Eliminar asignaciones futuras de este turno
+      await prisma.shift_assignments.deleteMany({
+        where: { shift_id: parseInt(id) }
+      });
       
+      // 3. Eliminar el turno
       await prisma.shifts.delete({
         where: { id: parseInt(id), pharmacy_id: pharmacyId }
       });
       
-      res.json({ success: true, message: 'Shift deleted' });
+      res.json({ success: true, message: 'Turno eliminado correctamente' });
     } catch (error: any) {
       console.error('Error deleting shift:', error);
       res.status(500).json({ success: false, message: error.message });
