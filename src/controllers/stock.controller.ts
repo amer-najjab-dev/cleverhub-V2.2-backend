@@ -19,18 +19,39 @@ export const stockController = {
   async getAll(req: AuthRequest, res: Response) {
     try {
       const pharmacyFilter = req.pharmacyFilter || {};
+      const { search, category, zone, lab, page = 1, limit = 10 } = req.query;
+      
+      // Construir filtro para productos
+      const productFilter: any = {};
+      if (search) {
+        productFilter.name = { contains: search as string, mode: 'insensitive' };
+      }
+      if (category) {
+        productFilter.category = category as string;
+      }
+      if (zone) {
+        productFilter.zone = zone as string;
+      }
+      if (lab) {
+        productFilter.laboratory = lab as string;
+      }
       
       const products = await prisma.inventory_lots.findMany({
         where: pharmacyFilter,
         include: {
           product: {
+            where: productFilter,
             select: {
               id: true,
               name: true,
               sku: true,
               category: true,
               pricePPV: true,
-              pricePPH: true
+              pricePPH: true,
+              dosageForm: true,
+              laboratory: true,
+              zone: true,
+              barcode: true
             }
           }
         },
@@ -39,8 +60,11 @@ export const stockController = {
         }
       });
       
+      // Filtrar lotes que tienen producto (después de aplicar filtro)
+      const filteredProducts = products.filter(p => p.product !== null);
+      
       // Agrupar por producto
-      const groupedProducts = products.reduce((acc: any, lot) => {
+      const groupedProducts = filteredProducts.reduce((acc: any, lot) => {
         const productId = lot.product_id;
         if (!acc[productId]) {
           acc[productId] = {
@@ -59,9 +83,24 @@ export const stockController = {
         return acc;
       }, {});
       
+      // Convertir a array y paginar
+      let resultArray = Object.values(groupedProducts);
+      const total = resultArray.length;
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const start = (pageNum - 1) * limitNum;
+      const end = start + limitNum;
+      const paginatedResults = resultArray.slice(start, end);
+      
       res.json({
         success: true,
-        data: Object.values(groupedProducts)
+        data: paginatedResults,
+        meta: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum)
+        }
       });
     } catch (error: any) {
       console.error('Error getting stock:', error);
