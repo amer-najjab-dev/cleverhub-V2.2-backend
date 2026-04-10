@@ -21,7 +21,7 @@ export const stockController = {
       const pharmacyFilter = req.pharmacyFilter || {};
       const { search, category, zone, lab, page = 1, limit = 10 } = req.query;
       
-      // Construir filtro para productos
+      // Primero, buscar productos que coincidan con el filtro
       const productFilter: any = {};
       if (search) {
         productFilter.name = { contains: search as string, mode: 'insensitive' };
@@ -36,11 +36,33 @@ export const stockController = {
         productFilter.laboratory = lab as string;
       }
       
-      const products = await prisma.inventory_lots.findMany({
-        where: pharmacyFilter,
+      // Obtener IDs de productos que cumplen el filtro
+      const matchingProducts = await prisma.products.findMany({
+        where: productFilter,
+        select: { id: true }
+      });
+      
+      const productIds = matchingProducts.map(p => p.id);
+      
+      // Si hay filtro y no hay productos, devolver vacío
+      if ((search || category || zone || lab) && productIds.length === 0) {
+        return res.json({
+          success: true,
+          data: [],
+          meta: { total: 0, page: 1, limit: 10, totalPages: 0 }
+        });
+      }
+      
+      // Construir filtro para lotes
+      const lotWhere: any = { ...pharmacyFilter };
+      if (productIds.length > 0) {
+        lotWhere.product_id = { in: productIds };
+      }
+      
+      const lots = await prisma.inventory_lots.findMany({
+        where: lotWhere,
         include: {
           product: {
-            where: productFilter,
             select: {
               id: true,
               name: true,
@@ -60,11 +82,8 @@ export const stockController = {
         }
       });
       
-      // Filtrar lotes que tienen producto (después de aplicar filtro)
-      const filteredProducts = products.filter(p => p.product !== null);
-      
       // Agrupar por producto
-      const groupedProducts = filteredProducts.reduce((acc: any, lot) => {
+      const groupedProducts = lots.reduce((acc: any, lot) => {
         const productId = lot.product_id;
         if (!acc[productId]) {
           acc[productId] = {
