@@ -355,6 +355,7 @@ router.delete('/suppliers/:id', requireRole(['ADMIN']), supplierController.delet
 // Stock - Solo ADMIN
 router.use('/stock', requireRole(['ADMIN']), stockRoutes);
 router.use('/inventory', requireRole(['ADMIN']), inventoryRoutes);
+router.get('/api/stock/summary', requireRole(['ADMIN']), stockController.getSummary);
 
 // RRHH - Solo ADMIN
 router.use('/hr', requireRole(['ADMIN']), hrRoutes);

@@ -183,6 +183,84 @@ export const stockController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
+
+  async getSummary(req: AuthRequest, res: Response) {
+    try {
+      const pharmacyFilter = req.pharmacyFilter || {};
+      
+      // Total de productos con stock
+      const totalProducts = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          quantity: { gt: 0 }
+        }
+      });
+      
+      // Stock total
+      const totalStock = await prisma.inventory_lots.aggregate({
+        where: pharmacyFilter,
+        _sum: { quantity: true }
+      });
+      
+      // Productos con stock bajo (< 10)
+      const lowStock = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          quantity: { lt: 10, gt: 0 }
+        }
+      });
+      
+      // Productos próximos a vencer (30 días)
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      
+      const expiringSoon = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          expiry_date: { lte: thirtyDaysFromNow, gt: new Date() },
+          quantity: { gt: 0 }
+        }
+      });
+      
+      // Productos vencidos
+      const expired = await prisma.inventory_lots.count({
+        where: {
+          ...pharmacyFilter,
+          expiry_date: { lt: new Date() },
+          quantity: { gt: 0 }
+        }
+      });
+      
+      // Valor total del inventario
+      const lotsWithProducts = await prisma.inventory_lots.findMany({
+        where: pharmacyFilter,
+        include: {
+          product: {
+            select: { pricePPH: true }
+          }
+        }
+      });
+      
+      const totalValue = lotsWithProducts.reduce((sum, lot) => {
+        return sum + (lot.quantity * Number(lot.product?.pricePPH || 0));
+      }, 0);
+      
+      res.json({
+        success: true,
+        data: {
+          total_products: totalProducts,
+          total_stock: totalStock._sum.quantity || 0,
+          low_stock: lowStock,
+          expiring_soon: expiringSoon,
+          expired: expired,
+          total_value: totalValue
+        }
+      });
+    } catch (error: any) {
+      console.error('Error getting stock summary:', error);
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
   
   // Obtener productos próximos a vencer
   async getExpiringProducts(req: AuthRequest, res: Response) {
