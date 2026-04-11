@@ -262,7 +262,7 @@ model client_debt {
   client_id         Int       @map("client_id")
   total_debt        Decimal   @default(0) @map("total_debt") @db.Decimal(10, 2)
   paid_amount       Decimal   @default(0) @map("paid_amount") @db.Decimal(10, 2)
-  pending_amount    Decimal?  @default(0) @map("pending_amount") @db.Decimal(10, 2)
+  pending_amount    Decimal?  @default(dbgenerated()) @map("pending_amount") @db.Decimal(10, 2)
   last_payment_date DateTime? @map("last_payment_date") @db.Timestamp(6)
   status            String?   @default("pending") @map("status") @db.VarChar(20)
   notes             String?   @map("notes")
