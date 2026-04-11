@@ -16,6 +16,7 @@ const auth_1 = require("./middleware/auth");
 const rbac_1 = require("./middleware/rbac");
 // Importar controladores para rutas públicas
 const auth_controller_1 = require("./controllers/auth.controller");
+const superadmin_controller_1 = require("./controllers/superadmin.controller");
 // Configuración según entorno
 const isProd = process.env.NODE_ENV === 'production';
 // Pool para sesiones (usa DATABASE_URL directamente)
@@ -138,6 +139,7 @@ app.get('/', (req, res) => {
 // Rutas de autenticación (públicas)
 app.post('/api/auth/login', auth_controller_1.authController.login);
 app.post('/api/auth/logout', auth_controller_1.authController.logout);
+app.get('/api/admin/cron/check-expirations', superadmin_controller_1.superAdminController.runExpirationCheck);
 // app.post('/api/auth/register', authController.register); // Si existe
 // app.post('/api/auth/forgot-password', authController.forgotPassword); // TODO: Implementar
 // app.post('/api/auth/reset-password', authController.resetPassword); // TODO: Implementar
@@ -197,7 +199,7 @@ console.log('🔄 Cargando rutas autenticadas...');
 const routes_1 = __importDefault(require("./routes"));
 // Aplicar middleware de autenticación a todas las rutas bajo /api
 // El middleware addPharmacyFilter añade el filtro de farmacia automáticamente
-app.use('/api', auth_1.requireAuth, rbac_1.addPharmacyFilter, routes_1.default);
+app.use(auth_1.requireAuth, rbac_1.addPharmacyFilter, routes_1.default);
 // ==========================================
 // 7. MANEJADOR DE ERRORES 404
 // ==========================================

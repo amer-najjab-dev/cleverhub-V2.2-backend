@@ -66,6 +66,7 @@ exports.coverageController = {
             while (currentDate <= end) {
                 const dateStr = currentDate.toISOString().split('T')[0];
                 for (const shift of shifts) {
+                    // Para turnos de guardia, solo incluir si hay período activo
                     if (shift.is_guard) {
                         const isGuardActive = guardPeriods.some(period => period.start_date <= currentDate && period.end_date >= currentDate && period.shift_id === shift.id);
                         if (!isGuardActive)

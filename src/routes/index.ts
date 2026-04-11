@@ -40,6 +40,7 @@ import stockRoutes from './stock.routes';
 import inventoryRoutes from './inventory.routes';
 import settingsRoutes from './settings.routes';
 import superAdminRoutes from './superadmin.routes';
+import deliveryRoutes from './delivery.routes';
 
 const router = Router();
 
@@ -52,6 +53,7 @@ router.use('/auth', authRoutes);
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
+router.use('/api', requireRole(['ADMIN']), deliveryRoutes);
 
 // ==========================================
 // RUTA PÚBLICA DEL CRON (sin autenticación)

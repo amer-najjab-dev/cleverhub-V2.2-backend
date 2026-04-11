@@ -5,9 +5,16 @@ const server_1 = require("../server");
 class ClientController {
     async getAll(req, res) {
         try {
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Usuario sin farmacia asignada'
+                });
+            }
             const { page = 1, limit = 20, search } = req.query;
             const skip = (Number(page) - 1) * Number(limit);
-            const where = {};
+            const where = { pharmacy_id: pharmacyId }; // ← Filtro obligatorio
             if (search) {
                 where.OR = [
                     { first_name: { contains: search, mode: 'insensitive' } },
@@ -26,33 +33,15 @@ class ClientController {
                         sales: {
                             orderBy: { created_at: 'desc' },
                             take: 1,
-                            select: {
-                                created_at: true
-                            }
+                            select: { created_at: true }
                         },
-                        client_debts: {
-                            where: {
-                                pending_amount: { gt: 0 }
-                            },
-                            select: {
-                                pending_amount: true
-                            }
-                        }
-                    }
+                    },
                 }),
                 server_1.prisma.clients.count({ where }),
             ]);
-            // Tipado correcto para el reduce
-            const clientsWithDetails = clients.map((client) => ({
-                ...client,
-                last_purchase_date: client.sales?.[0]?.created_at || null,
-                total_debt: client.client_debts?.reduce((sum, debt) => sum + Number(debt.pending_amount), 0) || 0,
-                sales: undefined,
-                client_debts: undefined
-            }));
             res.json({
                 success: true,
-                data: clientsWithDetails,
+                data: clients,
                 meta: {
                     total,
                     page: Number(page),
@@ -62,11 +51,7 @@ class ClientController {
             });
         }
         catch (error) {
-            console.error('Error getting clients:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
     async getById(req, res) {
@@ -102,6 +87,13 @@ class ClientController {
     }
     async create(req, res) {
         try {
+            const pharmacyId = req.user?.pharmacyId;
+            if (!pharmacyId) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'Usuario sin farmacia asignada'
+                });
+            }
             const { firstName, lastName, phone, email, dni, ...rest } = req.body;
             // Mapear camelCase a snake_case
             const clientData = {
@@ -110,22 +102,20 @@ class ClientController {
                 phone,
                 email,
                 dni,
+                pharmacy_id: pharmacyId, // ← Añadir pharmacy_id del token
                 ...rest
             };
             const client = await server_1.prisma.clients.create({
                 data: clientData,
             });
-            res.json({
+            res.status(201).json({
                 success: true,
                 data: client,
             });
         }
         catch (error) {
             console.error('Error creating client:', error);
-            res.status(500).json({
-                success: false,
-                message: error.message,
-            });
+            res.status(500).json({ success: false, message: error.message });
         }
     }
     async checkCanDelete(req, res) {
