@@ -18,19 +18,20 @@ export const deliveryController = {
         return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
       }
 
-      // Convertir fechas de los items
-      const itemsWithDates = req.body.items.map((item: any) => ({
-        ...item,
-        expiration_date: item.expiration_date ? new Date(item.expiration_date) : undefined
-      }));
-
-      const result = await deliveryService.registerDelivery({
+      // CONVERTIR TODAS LAS FECHAS
+      const convertedData = {
         ...req.body,
-        items: itemsWithDates,
-        received_by: req.user?.id,
         reception_date: new Date(req.body.reception_date),
+        due_date: req.body.due_date ? new Date(req.body.due_date) : undefined,
+        items: req.body.items.map((item: any) => ({
+          ...item,
+          expiration_date: item.expiration_date ? new Date(item.expiration_date) : undefined
+        })),
+        received_by: req.user?.id,
         pharmacy_id: pharmacyId
-      });
+      };
+
+      const result = await deliveryService.registerDelivery(convertedData);
       
       res.status(201).json({
         success: true,
