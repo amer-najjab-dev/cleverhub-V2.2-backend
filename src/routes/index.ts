@@ -1,8 +1,8 @@
-// src/routes/index.ts
 import { Router } from 'express';
 import { requireRole } from '../middleware/rbac';
 import { superAdminController } from '../controllers/superadmin.controller';
 import { checkExpirations } from '../controllers/superadmin.controller';
+import { AuthRequest } from '../middleware/rbac';
 
 // Importaciones de controladores
 import { pharmacyController } from '../controllers/pharmacy.controller';
@@ -53,7 +53,6 @@ router.use('/auth', authRoutes);
 router.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
-router.use('/api', requireRole(['ADMIN']), deliveryRoutes);
 
 // ==========================================
 // RUTA PÚBLICA DEL CRON (sin autenticación)
@@ -86,51 +85,14 @@ router.get('/admin/cron/check-expirations', async (req, res) => {
 // RUTAS CON PREFIJO /api (para compatibilidad con frontend)
 // ==========================================
 
-// Módulos
-router.get('/api/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async (req: any, res) => {
-  try {
-    const userRole = req.user?.role?.toUpperCase();
-    
-    const modules = {
-      SUPER_ADMIN: [
-        { name: 'Dashboard', path: '/admin/dashboard', icon: 'LayoutDashboard' },
-        { name: 'Farmacias', path: '/admin/pharmacies', icon: 'Store' },
-        { name: 'Usuarios Globales', path: '/admin/users', icon: 'Users' },
-        { name: 'Suscripciones', path: '/admin/subscriptions', icon: 'CreditCard' },
-        { name: 'Comunicación', path: '/admin/broadcast', icon: 'Bell' },
-        { name: 'Semáforo Salud', path: '/admin/health', icon: 'Activity' },
-        { name: 'Configuración', path: '/settings', icon: 'Settings' }
-      ],
-      ADMIN: [
-        { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
-        { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
-        { name: 'Clientes', path: '/clients', icon: 'Users' },
-        { name: 'Productos', path: '/products', icon: 'Package' },
-        { name: 'Stock', path: '/stock', icon: 'Box' },
-        { name: 'Proveedores', path: '/suppliers', icon: 'Truck' },
-        { name: 'RRHH', path: '/hr', icon: 'Users' },
-        { name: 'Reportes', path: '/reports', icon: 'FileText' }
-      ],
-      EMPLOYEE: [
-        { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
-        { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
-        { name: 'Clientes', path: '/clients', icon: 'Users' },
-        { name: 'Productos', path: '/products', icon: 'Package' }
-      ]
-    };
-    
-    const availableModules = modules[userRole as keyof typeof modules] || [];
-    res.json({ success: true, data: availableModules });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Dashboard endpoints
+// Dashboard endpoints - ADMIN y EMPLOYEE
 router.get('/api/dashboard/kpis', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getKPIs);
 router.get('/api/dashboard/hourly-sales', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getHourlySales);
 router.get('/api/dashboard/comparative', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getComparativeData);
 router.get('/api/dashboard/top-products', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getTopProducts);
+
+// Delivery routes - SOLO ADMIN
+router.use('/api', requireRole(['ADMIN']), deliveryRoutes);
 
 // ==========================================
 // RUTAS SUPER_ADMIN CON PREFIJO /api
@@ -187,13 +149,13 @@ router.get('/api/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => 
 // RUTAS API CON PREFIJO /api - USAR RUTAS EXISTENTES
 // ==========================================
 
-// Ventas
+// Ventas - ADMIN y EMPLOYEE
 router.use('/api/sales', requireRole(['ADMIN', 'EMPLOYEE']), saleRoutes);
 
-// Clientes
+// Clientes - ADMIN y EMPLOYEE
 router.use('/api/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
 
-// Productos
+// Productos - ADMIN y EMPLOYEE
 router.use('/api/products', requireRole(['ADMIN', 'EMPLOYEE']), productRoutes);
 
 // Stock - Solo ADMIN
@@ -228,50 +190,6 @@ router.use('/api/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes)
 
 // Usuarios - ADMIN y SUPER_ADMIN
 router.use('/api/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
-
-// ==========================================
-// RUTA PARA OBTENER MÓDULOS POR ROL (sin prefijo)
-// ==========================================
-router.get('/modules', requireRole(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async (req: any, res) => {
-  try {
-    const userRole = req.user?.role?.toUpperCase();
-    
-    const modules = {
-      SUPER_ADMIN: [
-        { name: 'Dashboard', path: '/admin/dashboard', icon: 'LayoutDashboard' },
-        { name: 'Farmacias', path: '/admin/pharmacies', icon: 'Store' },
-        { name: 'Suscripciones', path: '/admin/subscriptions', icon: 'CreditCard' },
-        { name: 'Usuarios Globales', path: '/admin/users', icon: 'Users' },
-        { name: 'Comunicación', path: '/admin/broadcast', icon: 'Bell' },
-        { name: 'Semáforo Salud', path: '/admin/health', icon: 'Activity' },
-        { name: 'Auditoría', path: '/admin/logs', icon: 'FileText' }
-      ],
-      ADMIN: [
-        { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
-        { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
-        { name: 'Clientes', path: '/clients', icon: 'Users' },
-        { name: 'Productos', path: '/products', icon: 'Package' },
-        { name: 'Stock', path: '/stock', icon: 'Box' },
-        { name: 'Proveedores', path: '/suppliers', icon: 'Truck' },
-        { name: 'RRHH', path: '/hr', icon: 'Users' },
-        { name: 'Reportes', path: '/reports', icon: 'FileText' },
-        { name: 'Configuración', path: '/settings', icon: 'Settings' }
-      ],
-      EMPLOYEE: [
-        { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
-        { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
-        { name: 'Clientes', path: '/clients', icon: 'Users' },
-        { name: 'Productos', path: '/products', icon: 'Package' }
-      ]
-    };
-    
-    const availableModules = modules[userRole as keyof typeof modules] || [];
-    res.json({ success: true, data: availableModules });
-  } catch (error: any) {
-    console.error('Error getting modules:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
 
 // ==========================================
 // RUTAS SUPER_ADMIN (Protegidas) - sin prefijo
@@ -334,17 +252,17 @@ router.get('/dashboard/quick-summary', requireRole(['ADMIN', 'EMPLOYEE']), dashb
 router.get('/dashboard/stock-stats', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getStockStats);
 
 // ==========================================
-// RUTAS SIN PREFIJO API (Compatibilidad) - SOLO ADMIN
+// RUTAS SIN PREFIJO API (Compatibilidad)
 // ==========================================
 console.log('  📌 Cargando rutas sin prefijo (compatibilidad)...');
 
-// Ventas
+// Ventas - ADMIN y EMPLOYEE
 router.use('/sales', requireRole(['ADMIN', 'EMPLOYEE']), saleRoutes);
 
-// Clientes
+// Clientes - ADMIN y EMPLOYEE
 router.use('/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
 
-// Productos
+// Productos - ADMIN y EMPLOYEE
 router.use('/products', requireRole(['ADMIN', 'EMPLOYEE']), productRoutes);
 
 // Proveedores - SOLO ADMIN
@@ -368,7 +286,7 @@ router.use('/reports', requireRole(['ADMIN', 'SUPER_ADMIN']), reportRoutes);
 // Configuración - Solo SUPER_ADMIN
 router.use('/settings', requireRole(['SUPER_ADMIN']), settingsRoutes);
 
-// Lealtad - ADMIN (configuración interna de la farmacia)
+// Lealtad - ADMIN
 router.use('/loyalty', requireRole(['ADMIN']), loyaltyRoutes);
 router.use('/loyalty-rewards', requireRole(['ADMIN']), loyaltyRewardRoutes);
 router.use('/loyalty-checkout', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyCheckoutRoutes);
