@@ -211,6 +211,7 @@ router.delete('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.d
 router.get('/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
 
 // Health status - DEBE IR ANTES del comodín
+console.log('🔧 DEFININDO ROTA /admin/health-status com requireRole:', ['SUPER_ADMIN']);
 router.get('/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
 
 // Logs - DEBE IR ANTES del comodín
