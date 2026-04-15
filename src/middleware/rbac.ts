@@ -15,10 +15,11 @@ export const requireRole = (allowedRoles: string[]) => {
   console.log(`[RBAC DEBUG] ⚠️ requireRole INIT - stack:`, new Error().stack);
   
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    console.log(`[RBAC DEBUG] Path: ${req.path} | URL: ${req.url} | Roles:`, allowedRoles);
-    console.log('🔐 [requireRole] Iniciando...');
-    console.log('🔐 [requireRole] req.user:', req.user);
-    console.log('🔐 [requireRole] allowedRoles:', allowedRoles);
+    console.log(`🔐 [requireRole] ========== INICIO ==========`);
+    console.log(`🔐 [requireRole] Ruta solicitada: ${req.method} ${req.originalUrl}`);
+    console.log(`🔐 [requireRole] Path: ${req.path} | URL: ${req.url}`);
+    console.log(`🔐 [requireRole] allowedRoles recibidos en ejecución:`, allowedRoles);
+    console.log(`🔐 [requireRole] req.user:`, req.user);
     
     if (!req.user) {
       console.log('❌ [requireRole] No hay usuario');
@@ -37,18 +38,20 @@ export const requireRole = (allowedRoles: string[]) => {
     const userRole = req.user.role.toLowerCase();
     const normalizedAllowed = finalAllowedRoles.map(r => r.toLowerCase());
     
-    console.log('🔐 [requireRole] userRole (normalizado):', userRole);
-    console.log('🔐 [requireRole] normalizedAllowed:', normalizedAllowed);
+    console.log(`🔐 [requireRole] userRole: ${userRole}`);
+    console.log(`🔐 [requireRole] normalizedAllowed:`, normalizedAllowed);
     
     if (!normalizedAllowed.includes(userRole)) {
-      console.log(`❌ [requireRole] Rol ${req.user.role} no permitido`);
+      console.log(`❌ [requireRole] Rol ${req.user.role} no permitido para la ruta ${req.originalUrl}`);
+      console.log(`🔐 [requireRole] ========== FIN ==========`);
       return res.status(403).json({ 
         success: false, 
         message: `No autorizado. Se requiere uno de estos roles: ${finalAllowedRoles.join(', ')}` 
       });
     }
     
-    console.log('✅ [requireRole] Acceso permitido');
+    console.log(`✅ [requireRole] Acceso permitido para ${req.originalUrl}`);
+    console.log(`🔐 [requireRole] ========== FIN ==========`);
     next();
   };
 };
