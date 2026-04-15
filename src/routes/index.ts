@@ -196,26 +196,24 @@ router.use('/api/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 // ==========================================
 console.log('  📌 Cargando rutas SUPER_ADMIN...');
 
-// Rutas de gestión de farmacias
+// Rutas específicas de SUPER_ADMIN - DEBEN IR ANTES del comodín
 router.get('/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.getAll);
 router.post('/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.create);
 router.put('/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.update);
 router.delete('/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.delete);
 
-// Rutas de gestión de usuarios globales
 router.get('/admin/users', requireRole(['SUPER_ADMIN']), userController.getAllUsers);
 router.get('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.getUserById);
 router.post('/admin/users', requireRole(['SUPER_ADMIN']), userController.createUser);
 router.put('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.updateUser);
 router.delete('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.deleteUser);
 
-// Estadísticas globales
 router.get('/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
 
-// Rutas de semáforo de salud
+// Health status - DEBE IR ANTES del comodín
 router.get('/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
 
-// Rutas de logs de auditoría
+// Logs - DEBE IR ANTES del comodín
 router.get('/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => {
   try {
     const { prisma } = await import('../server');
@@ -234,7 +232,7 @@ router.get('/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => {
   }
 });
 
-// Todas las rutas de superadmin (suscripciones, broadcast, impersonate)
+// ¡ESTA LÍNEA DEBE IR AL FINAL! - Todas las rutas de superadmin (suscripciones, broadcast, impersonate)
 router.use('/admin', requireRole(['SUPER_ADMIN']), superAdminRoutes);
 
 // ==========================================
