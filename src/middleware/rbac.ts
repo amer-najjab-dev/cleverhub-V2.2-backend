@@ -11,37 +11,27 @@ export interface AuthRequest extends Request {
 
 export const requireRole = (allowedRoles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    console.log('🔐 [requireRole] Iniciando...');
-    console.log('🔐 [requireRole] req.user:', req.user);
-    console.log('🔐 [requireRole] allowedRoles:', allowedRoles);
-    
     if (!req.user) {
-      console.log('❌ [requireRole] No hay usuario');
       return res.status(401).json({ success: false, message: 'No autenticado' });
     }
     
-    // NORMALIZAR: convertir todo a MAYÚSCULAS para comparar
+    // NORMALIZAR A MAYÚSCULAS
     const userRole = req.user.role.toUpperCase();
     const normalizedAllowed = allowedRoles.map(r => r.toUpperCase());
     
-    console.log('🔐 [requireRole] Rol normalizado (mayúsculas):', userRole);
-    console.log('🔐 [requireRole] Roles permitidos (mayúsculas):', normalizedAllowed);
-    
-    // Si es SUPER_ADMIN, acceso garantizado
+    // SUPER_ADMIN siempre pasa
     if (userRole === 'SUPER_ADMIN') {
-      console.log('✅ [requireRole] SUPER_ADMIN acceso garantizado');
       return next();
     }
     
+    // Comparación normalizada
     if (!normalizedAllowed.includes(userRole)) {
-      console.log(`❌ [requireRole] Rol ${req.user.role} no permitido`);
       return res.status(403).json({ 
         success: false, 
         message: `No autorizado. Se requiere uno de estos roles: ${allowedRoles.join(', ')}` 
       });
     }
     
-    console.log('✅ [requireRole] Acceso permitido');
     next();
   };
 };
