@@ -23,15 +23,18 @@ export const requireRole = (allowedRoles: string[]) => {
     let userRole = req.user.role;
     let mappedRole = userRole;
     
-    // SOLO mapear SUPER_ADMIN a ADMIN si ADMIN está en los roles permitidos
-    // y SUPER_ADMIN NO está en los roles permitidos
-    const needsAdmin = allowedRoles.includes('ADMIN') && !allowedRoles.includes('SUPER_ADMIN');
-    
-    if (userRole === 'SUPER_ADMIN' && needsAdmin) {
-      console.log('🔄 [requireRole] Mapeando SUPER_ADMIN a ADMIN (ruta requiere ADMIN)');
-      mappedRole = 'ADMIN';
-    } else {
-      console.log('🔐 [requireRole] Manteniendo rol original:', userRole);
+    // Mapear SUPER_ADMIN a los roles que necesita la ruta
+    if (userRole === 'SUPER_ADMIN') {
+      // Si la ruta requiere ADMIN o EMPLOYEE, mapear a ese rol
+      if (allowedRoles.includes('ADMIN')) {
+        console.log('🔄 [requireRole] Mapeando SUPER_ADMIN a ADMIN');
+        mappedRole = 'ADMIN';
+      } else if (allowedRoles.includes('EMPLOYEE')) {
+        console.log('🔄 [requireRole] Mapeando SUPER_ADMIN a EMPLOYEE');
+        mappedRole = 'EMPLOYEE';
+      } else {
+        console.log('🔐 [requireRole] Manteniendo SUPER_ADMIN');
+      }
     }
     
     const normalizedUserRole = mappedRole.toLowerCase();
