@@ -10,7 +10,11 @@ export interface AuthRequest extends Request {
 }
 
 export const requireRole = (allowedRoles: string[]) => {
+  console.log(`🔧 [requireRole INIT] Ruta configurada con:`, allowedRoles);
+  
   return (req: AuthRequest, res: Response, next: NextFunction) => {
+    console.log(`🔧 [requireRole EJECUTANDO] URL: ${req.url}, allowedRoles originales:`, allowedRoles);
+    
     // FORZAR PARA HEALTH-STATUS
     let finalAllowedRoles = [...allowedRoles];
     if (req.url.includes('health-status')) {
@@ -18,8 +22,8 @@ export const requireRole = (allowedRoles: string[]) => {
       console.log('🔧 FORZADO: health-status requiere SUPER_ADMIN');
     }
     
-    console.log(`🔐 [requireRole] Ruta: ${req.url} | Roles:`, finalAllowedRoles);
-    // ... resto del código
+    console.log(`🔧 [requireRole] Roles finales:`, finalAllowedRoles);
+    // ... resto
   };
 };
 
