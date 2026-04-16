@@ -184,7 +184,8 @@ class UserController {
                         user_id: user.id,
                         pharmacy_id: Number(pharmacyId), // pharmacy_id es requerido, debe tener valor
                         vacation_days: 22, // 
-                        vacation_days_used: 0
+                        vacation_days_used: 0,
+                        updated_at: new Date()
                     }
                 });
             }

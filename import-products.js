@@ -1,21 +1,11 @@
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import { Pool } from 'pg';
-import * as fs from 'fs';
+const { PrismaClient } = require('@prisma/client');
+const fs = require('fs');
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  console.error('❌ DATABASE_URL no está definida');
-  process.exit(1);
-}
+const prisma = new PrismaClient();
 
-const pool = new Pool({ connectionString });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
-
-function parsePrice(value: string): number {
+function parsePrice(value) {
   if (!value || value === '--') return 0;
-  return parseFloat(value.replace(',', '.'));
+  return parseFloat(String(value).replace(',', '.'));
 }
 
 async function importProducts() {
@@ -28,14 +18,18 @@ async function importProducts() {
     
     let imported = 0;
     let errors = 0;
+    let skipped = 0;
     
     for (const product of products) {
       try {
-        const sku = product.ean && product.ean !== '--' ? product.ean : `PROD_${Date.now()}_${imported}`;
+        const sku = product.ean && product.ean !== '--' ? product.ean : `temp-${Date.now()}-${Math.random()}-${imported}`;
         const pricePPV = parsePrice(product.ppv);
         const pricePPH = parsePrice(product.pph);
         
-        if (!product.nombre || product.nombre === '--') continue;
+        if (!product.nombre || product.nombre === '--') {
+          skipped++;
+          continue;
+        }
         
         await prisma.products.upsert({
           where: { sku: sku },
@@ -45,6 +39,8 @@ async function importProducts() {
             pricePPH: pricePPH,
             category: product.categoria,
             barcode: product.ean !== '--' ? product.ean : null,
+            active: true,
+            stock: 0,
           },
           create: {
             name: product.nombre,
@@ -64,15 +60,17 @@ async function importProducts() {
         }
       } catch (error) {
         errors++;
+        console.error(`❌ Error importando: ${product.nombre}`, error.message);
       }
     }
     
-    console.log(`\n🎉 Importación completada!`);
+    console.log(`\n🎉 Importación completada:`);
     console.log(`   ✅ Importados: ${imported}`);
     console.log(`   ❌ Errores: ${errors}`);
+    console.log(`   ⏭️ Saltados (sin nombre): ${skipped}`);
     
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error('❌ Error leyendo archivo:', error);
   } finally {
     await prisma.$disconnect();
   }

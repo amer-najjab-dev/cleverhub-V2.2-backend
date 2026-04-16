@@ -5,10 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authorize = exports.authenticate = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
-/**
- * Middleware de autenticación
- * Verifica token JWT
- */
+
 const authenticate = (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -17,7 +14,6 @@ const authenticate = (req, res, next) => {
     const token = authHeader.split(" ")[1];
     try {
         const decoded = jsonwebtoken_1.default.verify(token, process.env.JWT_SECRET);
-        // Inyectamos el usuario en la request
         req.user = decoded;
         next();
     }
@@ -26,12 +22,21 @@ const authenticate = (req, res, next) => {
     }
 };
 exports.authenticate = authenticate;
-/**
- * Middleware de autorización por roles
- */
+
+// 🔥 Actualizar authorize para mapear SUPER_ADMIN
 const authorize = (...roles) => (req, res, next) => {
     const user = req.user;
-    if (!user || !roles.includes(user.role)) {
+    if (!user) {
+        return res.status(401).json({ error: "No autenticado" });
+    }
+    
+    // Mapear SUPER_ADMIN a ADMIN para autorización
+    let userRole = user.role;
+    if (userRole === 'SUPER_ADMIN') {
+        userRole = 'ADMIN';
+    }
+    
+    if (!roles.includes(userRole)) {
         return res.status(403).json({ error: "Permisos insuficientes" });
     }
     next();

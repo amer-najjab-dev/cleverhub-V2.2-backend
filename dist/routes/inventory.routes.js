@@ -12,4 +12,5 @@ router.delete('/lots/:id', inventory_controller_1.inventoryController.deleteLot)
 //router.get('/counts', inventoryController.getCounts);
 router.post('/adjust', inventory_controller_1.inventoryController.adjustInventory);
 router.get('/alerts', inventory_controller_1.inventoryController.getAlerts);
+router.get('/summary', inventory_controller_1.inventoryController.getSummary);
 exports.default = router;

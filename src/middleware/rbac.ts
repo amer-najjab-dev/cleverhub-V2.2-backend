@@ -20,14 +20,24 @@ export const requireRole = (allowedRoles: string[]) => {
       return res.status(401).json({ success: false, message: 'No autenticado' });
     }
     
-    // Normalizar a minúsculas para comparación
-    const userRole = req.user.role.toLowerCase();
+    // 🔥 SOLUCIÓN: Mapear SUPER_ADMIN a ADMIN
+    let userRole = req.user.role;
+    let mappedRole = userRole;
+    
+    if (userRole === 'SUPER_ADMIN') {
+      console.log('🔄 [requireRole] Mapeando SUPER_ADMIN a ADMIN');
+      mappedRole = 'ADMIN';
+    }
+    
+    const normalizedUserRole = mappedRole.toLowerCase();
     const normalizedAllowed = allowedRoles.map(r => r.toLowerCase());
     
-    console.log('🔐 [requireRole] userRole (normalizado):', userRole);
-    console.log('🔐 [requireRole] normalizedAllowed:', normalizedAllowed);
+    console.log('🔐 [requireRole] Rol original:', userRole);
+    console.log('🔐 [requireRole] Rol mapeado:', mappedRole);
+    console.log('🔐 [requireRole] Rol normalizado:', normalizedUserRole);
+    console.log('🔐 [requireRole] Roles permitidos:', normalizedAllowed);
     
-    if (!normalizedAllowed.includes(userRole)) {
+    if (!normalizedAllowed.includes(normalizedUserRole)) {
       console.log(`❌ [requireRole] Rol ${req.user.role} no permitido`);
       return res.status(403).json({ 
         success: false, 
@@ -46,4 +56,4 @@ export const addPharmacyFilter = (req: AuthRequest, res: Response, next: NextFun
     (req as any).pharmacyFilter = { pharmacy_id: req.user.pharmacyId };
   }
   next();
-};
+};// force deploy Jeu 16 avr 2026 18:00:30 +01

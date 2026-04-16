@@ -10,6 +10,21 @@ interface AuthRequest extends Request {
   };
 }
 
+// ✅ FUNCIÓN FUERA DEL OBJETO (antes de export const shiftController)
+const getShiftColor = (name: string): string => {
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes('mañana') || lowerName.includes('matin')) {
+    return '#87CEEB'; // Celeste
+  }
+  if (lowerName.includes('tarde') || lowerName.includes('après-midi')) {
+    return '#FFA500'; // Naranja
+  }
+  if (lowerName.includes('noche') || lowerName.includes('nuit')) {
+    return '#483D8B'; // Color luna
+  }
+  return '#3B82F6'; // Azul por defecto
+};
+
 export const shiftController = {
   getAll: async (req: AuthRequest, res: Response) => {
     try {
@@ -34,6 +49,7 @@ export const shiftController = {
         end_time: shift.end_time,
         is_guard: shift.is_guard,
         min_employees_required: shift.min_employees_required,
+        color: shift.color,  // ← Añadir color a la respuesta
         created_at: shift.created_at,
         updated_at: shift.updated_at
       }));
@@ -44,46 +60,56 @@ export const shiftController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
-  
+
   create: async (req: AuthRequest, res: Response) => {
     try {
-      const { name, startTime, endTime, isGuard, minEmployeesRequired } = req.body;
       const pharmacyId = req.user?.pharmacyId;
-      
       if (!pharmacyId) {
-        return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
+        return res.status(403).json({ success: false, message: 'Usuario sin farmacia' });
       }
-      
+
+      const { name, start_time, end_time, min_employees_required, color } = req.body;
+
+      // Validar campos requeridos
+      if (!name || !start_time || !end_time) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Faltan campos requeridos: name, start_time, end_time' 
+        });
+      }
+
       const shift = await prisma.shifts.create({
         data: {
-          name,
-          start_time: startTime,
-          end_time: endTime,
-          is_guard: isGuard || false,
-          min_employees_required: minEmployeesRequired || 1,
           pharmacy_id: pharmacyId,
+          name,
+          start_time,
+          end_time,
+          min_employees_required: min_employees_required || 1,
+          color: color || getShiftColor(name),
+          is_guard: false,
           updated_at: new Date()
         }
       });
-      
+
+      // Crear configuración por defecto en pharmacy_configs
       await prisma.pharmacy_configs.create({
         data: {
           shift_id: shift.id,
-          min_employees_required: minEmployeesRequired || 1
+          min_employees_required: min_employees_required || 1
         }
       });
-      
+
       res.status(201).json({ success: true, data: shift });
     } catch (error: any) {
       console.error('Error creating shift:', error);
       res.status(500).json({ success: false, message: error.message });
     }
   },
-  
+
   update: async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
-      const { name, startTime, endTime, isGuard, minEmployeesRequired } = req.body;
+      const { name, start_time, end_time, is_guard, min_employees_required, color } = req.body;
       const pharmacyId = req.user?.pharmacyId;
       
       if (!pharmacyId) {
@@ -94,17 +120,25 @@ export const shiftController = {
         where: { id: parseInt(id), pharmacy_id: pharmacyId },
         data: {
           name,
-          start_time: startTime,
-          end_time: endTime,
-          is_guard: isGuard,
-          min_employees_required: minEmployeesRequired
+          start_time,
+          end_time,
+          is_guard: is_guard || false,
+          min_employees_required,
+          color: color || getShiftColor(name),
+          updated_at: new Date()
         }
       });
       
-      await prisma.pharmacy_configs.update({
-        where: { shift_id: parseInt(id) },
-        data: { min_employees_required: minEmployeesRequired }
-      });
+      if (min_employees_required !== undefined) {
+        await prisma.pharmacy_configs.upsert({
+          where: { shift_id: parseInt(id) },
+          update: { min_employees_required },
+          create: {
+            shift_id: parseInt(id),
+            min_employees_required
+          }
+        });
+      }
       
       res.json({ success: true, data: shift });
     } catch (error: any) {
@@ -112,7 +146,7 @@ export const shiftController = {
       res.status(500).json({ success: false, message: error.message });
     }
   },
-  
+
   delete: async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
@@ -122,28 +156,29 @@ export const shiftController = {
         return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
       }
       
-      const employeesWithShift = await prisma.employees.count({
-        where: { default_shift_id: parseInt(id), pharmacy_id: pharmacyId }
+      // 1. Desasignar empleados que tienen este turno por defecto
+      await prisma.employees.updateMany({
+        where: { default_shift_id: parseInt(id), pharmacy_id: pharmacyId },
+        data: { default_shift_id: null }
       });
       
-      if (employeesWithShift > 0) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'No se puede eliminar el turno porque hay empleados asignados' 
-        });
-      }
+      // 2. Eliminar asignaciones futuras de este turno
+      await prisma.shift_assignments.deleteMany({
+        where: { shift_id: parseInt(id) }
+      });
       
+      // 3. Eliminar el turno
       await prisma.shifts.delete({
         where: { id: parseInt(id), pharmacy_id: pharmacyId }
       });
       
-      res.json({ success: true, message: 'Shift deleted' });
+      res.json({ success: true, message: 'Turno eliminado correctamente' });
     } catch (error: any) {
       console.error('Error deleting shift:', error);
       res.status(500).json({ success: false, message: error.message });
     }
   },
-  
+
   getConfig: async (req: AuthRequest, res: Response) => {
     try {
       const { shiftId } = req.params;
@@ -169,12 +204,6 @@ export const shiftController = {
     }
   },
 
-  /**
-   * Actualizar la configuración mínima de empleados para un turno
-   * @route PATCH /api/hr/shifts/:id/config
-   * @param id - ID del turno
-   * @param min_employees_required - Número mínimo de empleados requeridos
-   */
   updateShiftConfig: async (req: AuthRequest, res: Response) => {
     try {
       const { id } = req.params;
@@ -185,7 +214,6 @@ export const shiftController = {
         return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
       }
 
-      // Validar que el valor sea positivo
       if (min_employees_required < 1) {
         return res.status(400).json({ 
           success: false, 
@@ -193,7 +221,6 @@ export const shiftController = {
         });
       }
 
-      // Verificar que el turno existe y pertenece a la farmacia
       const shift = await prisma.shifts.findFirst({
         where: { 
           id: parseInt(id), 
@@ -208,20 +235,18 @@ export const shiftController = {
         });
       }
 
-      // Actualizar en pharmacy_configs (configuración específica)
       await prisma.pharmacy_configs.upsert({
         where: { shift_id: parseInt(id) },
-        update: { min_employees_required: min_employees_required },
+        update: { min_employees_required },
         create: {
           shift_id: parseInt(id),
-          min_employees_required: min_employees_required
+          min_employees_required
         }
       });
 
-      // También actualizar en shifts (por compatibilidad)
       await prisma.shifts.update({
         where: { id: parseInt(id), pharmacy_id: pharmacyId },
-        data: { min_employees_required: min_employees_required }
+        data: { min_employees_required }
       });
 
       res.json({ 

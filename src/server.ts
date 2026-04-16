@@ -55,7 +55,7 @@ const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000',
-  process.env.FRONTEND_URL || 'https://cleverhub-v2-frontend.vercel.app',
+  process.env.FRONTEND_URL || 'https://cleverhub-v2-2-frontend.vercel.app',
   // Expresión regular para aceptar cualquier preview de Vercel
   /^https:\/\/cleverhub-v2-frontend-git-[a-zA-Z0-9-]+\.vercel\.app$/,
   /^https:\/\/cleverhub-v2-frontend-.*\.vercel\.app$/,

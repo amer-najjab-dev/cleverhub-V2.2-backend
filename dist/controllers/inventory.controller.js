@@ -7,14 +7,34 @@ exports.inventoryController = {
     getAll: async (req, res) => {
         try {
             const pharmacyFilter = req.pharmacyFilter || {};
+            // Obtener parámetros de paginación
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 20;
+            const skip = (page - 1) * limit;
+            // Obtener total de registros
+            const total = await server_1.prisma.inventory_lots.count({
+                where: pharmacyFilter
+            });
+            // Obtener registros paginados
             const inventory = await server_1.prisma.inventory_lots.findMany({
                 where: pharmacyFilter,
                 include: {
                     product: true
                 },
-                orderBy: { expiry_date: 'asc' }
+                orderBy: { expiry_date: 'asc' },
+                skip: skip,
+                take: limit
             });
-            res.json({ success: true, data: inventory });
+            res.json({
+                success: true,
+                data: inventory,
+                meta: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit)
+                }
+            });
         }
         catch (error) {
             res.status(500).json({ success: false, message: error.message });
@@ -41,6 +61,75 @@ exports.inventoryController = {
                 orderBy: { expiry_date: 'asc' }
             });
             res.json({ success: true, data: lots });
+        }
+        catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+    // Obtener resumen del inventario
+    getSummary: async (req, res) => {
+        try {
+            const pharmacyFilter = req.pharmacyFilter || {};
+            // Total de productos (lotes únicos por producto)
+            const totalProducts = await server_1.prisma.inventory_lots.groupBy({
+                by: ['product_id'],
+                where: pharmacyFilter,
+                _count: {
+                    product_id: true
+                }
+            });
+            // Stock total
+            const totalStock = await server_1.prisma.inventory_lots.aggregate({
+                where: pharmacyFilter,
+                _sum: { quantity: true }
+            });
+            // Productos con stock bajo (< 10)
+            const lowStock = await server_1.prisma.inventory_lots.count({
+                where: {
+                    ...pharmacyFilter,
+                    quantity: { lt: 10 }
+                }
+            });
+            // Productos por vencer (próximos 30 días)
+            const thirtyDaysFromNow = new Date();
+            thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+            const expiringSoon = await server_1.prisma.inventory_lots.count({
+                where: {
+                    ...pharmacyFilter,
+                    expiry_date: { lte: thirtyDaysFromNow, gt: new Date() }
+                }
+            });
+            // Productos vencidos
+            const expired = await server_1.prisma.inventory_lots.count({
+                where: {
+                    ...pharmacyFilter,
+                    expiry_date: { lt: new Date() }
+                }
+            });
+            // Valor total del inventario (aproximado)
+            const inventoryValue = await server_1.prisma.inventory_lots.findMany({
+                where: pharmacyFilter,
+                include: {
+                    product: {
+                        select: { pricePPH: true }
+                    }
+                }
+            });
+            const totalValue = inventoryValue.reduce((sum, lot) => {
+                const price = Number(lot.product?.pricePPH ?? 0);
+                return sum + (lot.quantity * price);
+            }, 0);
+            res.json({
+                success: true,
+                data: {
+                    total_products: totalProducts.length,
+                    total_stock: totalStock._sum.quantity || 0,
+                    low_stock: lowStock,
+                    expiring_soon: expiringSoon,
+                    expired: expired,
+                    total_value: totalValue
+                }
+            });
         }
         catch (error) {
             res.status(500).json({ success: false, message: error.message });

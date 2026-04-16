@@ -14,7 +14,7 @@ function parsePrice(value) {
 }
 async function importProducts() {
     try {
-        const filePath = '/Users/admin/Downloads/cleverhub_productos_FINAL_COMPLETO_2026-03-27T09-50-14-558Z.json';
+        const filePath = '/Users/admin/Downloads/cleverhub_productos_50k_productos_2026-03-28T16-51-44-264Z.json';
         const products = require(filePath);
         console.log(`📦 Importando ${products.length} productos...`);
         let imported = 0;

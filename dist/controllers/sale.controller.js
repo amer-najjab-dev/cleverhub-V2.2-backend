@@ -4,6 +4,8 @@ exports.saleController = exports.VentaController = void 0;
 const server_1 = require("../server");
 class VentaController {
     async crear(req, res) {
+        console.log('🔵 [crear] req.user:', req.user);
+        console.log('🔵 [crear] pharmacyId:', req.user?.pharmacyId);
         console.log('Payload recibido:', JSON.stringify(req.body, null, 2));
         try {
             const { userId, clientId, paymentMethod, items, payments: paymentItems, notes, discountType: discountTypeBody, discountPercentage: discountPercentageBody, discountAmount: discountAmountBody } = req.body;

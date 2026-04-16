@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addPharmacyFilter = exports.requirePharmacy = exports.requireRole = exports.requireAuth = void 0;
+exports.addPharmacyFilter = exports.requirePharmacy = exports.requireAuth = void 0;
 const server_1 = require("../server");
 const jwt_1 = require("../utils/jwt");
 // No declarar session aquí porque ya está en express-session
@@ -88,42 +88,6 @@ const requireAuth = async (req, res, next) => {
     }
 };
 exports.requireAuth = requireAuth;
-const requireRole = (roles) => {
-    return async (req, res, next) => {
-        try {
-            const user = req.user;
-            console.log(`🔐 [requireRole] Verificando rol para usuario:`, {
-                userId: user?.id,
-                userRole: user?.role,
-                requiredRoles: roles
-            });
-            if (!user) {
-                console.log('❌ [requireRole] No hay usuario autenticado');
-                return res.status(401).json({
-                    success: false,
-                    message: 'No autenticado'
-                });
-            }
-            if (!user.role || !roles.includes(user.role)) {
-                console.log(`❌ [requireRole] Rol ${user.role} no autorizado. Roles requeridos: ${roles.join(', ')}`);
-                return res.status(403).json({
-                    success: false,
-                    message: `No autorizado. Se requiere uno de estos roles: ${roles.join(', ')}`
-                });
-            }
-            console.log(`✅ [requireRole] Rol ${user.role} autorizado`);
-            next();
-        }
-        catch (error) {
-            console.error('❌ [requireRole] Error:', error);
-            return res.status(500).json({
-                success: false,
-                message: 'Error de autorización'
-            });
-        }
-    };
-};
-exports.requireRole = requireRole;
 // Middleware para verificar que el usuario tiene una farmacia asignada
 const requirePharmacy = async (req, res, next) => {
     try {
