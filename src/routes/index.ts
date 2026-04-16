@@ -197,44 +197,45 @@ router.use('/api/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 console.log('  📌 Cargando rutas SUPER_ADMIN...');
 
 // Rutas específicas de SUPER_ADMIN - DEBEN IR ANTES del comodín
-router.get('/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.getAll);
-router.post('/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.create);
-router.put('/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.update);
-router.delete('/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.delete);
+//router.get('/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.getAll);
+//router.post('/admin/pharmacies', requireRole(['SUPER_ADMIN']), pharmacyController.create);
+//router.put('/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.update);
+//router.delete('/admin/pharmacies/:id', requireRole(['SUPER_ADMIN']), pharmacyController.delete);
 
-router.get('/admin/users', requireRole(['SUPER_ADMIN']), userController.getAllUsers);
-router.get('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.getUserById);
-router.post('/admin/users', requireRole(['SUPER_ADMIN']), userController.createUser);
-router.put('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.updateUser);
-router.delete('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.deleteUser);
+//router.get('/admin/users', requireRole(['SUPER_ADMIN']), userController.getAllUsers);
+//router.get('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.getUserById);
+//router.post('/admin/users', requireRole(['SUPER_ADMIN']), userController.createUser);
+//router.put('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.updateUser);
+//router.delete('/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.deleteUser);
 
-router.get('/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
+
+//router.get('/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.getStockStats);
 
 // Health status - DEBE IR ANTES del comodín
-console.log('🔧 DEFININDO ROTA /admin/health-status com requireRole:', ['SUPER_ADMIN']);
+//console.log('🔧 DEFININDO ROTA /admin/health-status com requireRole:', ['SUPER_ADMIN']);
 //router.get('/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
 
 // Logs - DEBE IR ANTES del comodín
-router.get('/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => {
-  try {
-    const { prisma } = await import('../server');
-    const logs = await prisma.adminLog.findMany({
-      include: {
-        admin: {
-          select: { id: true, email: true, full_name: true }
-        }
-      },
-      orderBy: { created_at: 'desc' },
-      take: 100
-    });
-    res.json({ success: true, data: logs });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
+//router.get('/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => {
+  //try {
+    //const { prisma } = await import('../server');
+    //const logs = await prisma.adminLog.findMany({
+      //include: {
+        //admin: {
+          //select: { id: true, email: true, full_name: true }
+        //}
+      //},
+      //orderBy: { created_at: 'desc' },
+     // take: 100
+    //});
+    //res.json({ success: true, data: logs });
+  //} catch (error: any) {
+    //res.status(500).json({ success: false, message: error.message });
+  //}
+//});
 
 // ¡ESTA LÍNEA DEBE IR AL FINAL! - Todas las rutas de superadmin (suscripciones, broadcast, impersonate)
-router.use('/admin', requireRole(['SUPER_ADMIN']), superAdminRoutes);
+//router.use('/admin', requireRole(['SUPER_ADMIN']), superAdminRoutes);
 
 // ==========================================
 // RUTAS DASHBOARD - ADMIN y EMPLOYEE (sin prefijo)
