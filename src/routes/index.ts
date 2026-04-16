@@ -117,7 +117,12 @@ router.post('/api/admin/subscriptions', requireRole(['SUPER_ADMIN']), superAdmin
 router.post('/api/admin/subscriptions/extend-courtesy', requireRole(['SUPER_ADMIN']), superAdminController.extendCourtesy);
 router.post('/api/admin/subscriptions/renew', requireRole(['SUPER_ADMIN']), superAdminController.renewLicense);
 
-// Health status - RUTA CORREGIDA Y ACTIVA
+// ==========================================
+// RUTA FALTANTE: /api/admin/health-status
+// ==========================================
+router.get('/api/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
+
+// Health status - ruta alternativa
 router.get('/api/super-admin/health', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
 
 // Broadcast
