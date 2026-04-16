@@ -118,7 +118,7 @@ router.post('/api/admin/subscriptions/extend-courtesy', requireRole(['SUPER_ADMI
 router.post('/api/admin/subscriptions/renew', requireRole(['SUPER_ADMIN']), superAdminController.renewLicense);
 
 // Health status
-router.get('/api/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
+router.get('/api/super-admin/health', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
 
 // Broadcast
 router.post('/api/admin/broadcast', requireRole(['SUPER_ADMIN']), superAdminController.sendBroadcast);
