@@ -56,4 +56,4 @@ export const addPharmacyFilter = (req: AuthRequest, res: Response, next: NextFun
     (req as any).pharmacyFilter = { pharmacy_id: req.user.pharmacyId };
   }
   next();
-};
+};// force deploy Jeu 16 avr 2026 18:00:30 +01
