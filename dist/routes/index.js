@@ -36,7 +36,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-// src/routes/index.ts
 const express_1 = require("express");
 const rbac_1 = require("../middleware/rbac");
 const superadmin_controller_1 = require("../controllers/superadmin.controller");
@@ -46,6 +45,7 @@ const pharmacy_controller_1 = require("../controllers/pharmacy.controller");
 const user_controller_1 = require("../controllers/user.controller");
 const dashboard_controller_1 = require("../controllers/dashboard.controller");
 const supplier_controller_1 = require("../controllers/supplier.controller");
+const stock_controller_1 = require("../controllers/stock.controller");
 // Importaciones de rutas existentes
 const auth_routes_1 = __importDefault(require("./auth.routes"));
 const user_routes_1 = __importDefault(require("./user.routes"));
@@ -68,6 +68,7 @@ const stock_routes_1 = __importDefault(require("./stock.routes"));
 const inventory_routes_1 = __importDefault(require("./inventory.routes"));
 const settings_routes_1 = __importDefault(require("./settings.routes"));
 const superadmin_routes_1 = __importDefault(require("./superadmin.routes"));
+const delivery_routes_1 = __importDefault(require("./delivery.routes"));
 const router = (0, express_1.Router)();
 console.log('🔄 Cargando rutas con sistema RBAC multi-tenant...');
 // ==========================================
@@ -105,49 +106,13 @@ router.get('/admin/cron/check-expirations', async (req, res) => {
 // ==========================================
 // RUTAS CON PREFIJO /api (para compatibilidad con frontend)
 // ==========================================
-// Módulos
-router.get('/api/modules', (0, rbac_1.requireRole)(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async (req, res) => {
-    try {
-        const userRole = req.user?.role;
-        const modules = {
-            SUPER_ADMIN: [
-                { name: 'Dashboard', path: '/admin/dashboard', icon: 'LayoutDashboard' },
-                { name: 'Farmacias', path: '/admin/pharmacies', icon: 'Store' },
-                { name: 'Usuarios Globales', path: '/admin/users', icon: 'Users' },
-                { name: 'Suscripciones', path: '/admin/subscriptions', icon: 'CreditCard' },
-                { name: 'Comunicación', path: '/admin/broadcast', icon: 'Bell' },
-                { name: 'Semáforo Salud', path: '/admin/health', icon: 'Activity' },
-                { name: 'Configuración', path: '/settings', icon: 'Settings' }
-            ],
-            ADMIN: [
-                { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
-                { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
-                { name: 'Clientes', path: '/clients', icon: 'Users' },
-                { name: 'Productos', path: '/products', icon: 'Package' },
-                { name: 'Stock', path: '/stock', icon: 'Box' },
-                { name: 'Proveedores', path: '/suppliers', icon: 'Truck' },
-                { name: 'RRHH', path: '/hr', icon: 'Users' },
-                { name: 'Reportes', path: '/reports', icon: 'FileText' }
-            ],
-            EMPLOYEE: [
-                { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
-                { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
-                { name: 'Clientes', path: '/clients', icon: 'Users' },
-                { name: 'Productos', path: '/products', icon: 'Package' }
-            ]
-        };
-        const availableModules = modules[userRole] || [];
-        res.json({ success: true, data: availableModules });
-    }
-    catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-// Dashboard endpoints
+// Dashboard endpoints - ADMIN y EMPLOYEE
 router.get('/api/dashboard/kpis', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getKPIs);
 router.get('/api/dashboard/hourly-sales', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getHourlySales);
 router.get('/api/dashboard/comparative', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getComparativeData);
 router.get('/api/dashboard/top-products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getTopProducts);
+// Delivery routes - SOLO ADMIN
+router.use('/api', (0, rbac_1.requireRole)(['ADMIN']), delivery_routes_1.default);
 // ==========================================
 // RUTAS SUPER_ADMIN CON PREFIJO /api
 // ==========================================
@@ -195,11 +160,11 @@ router.get('/api/admin/logs', (0, rbac_1.requireRole)(['SUPER_ADMIN']), async (r
 // ==========================================
 // RUTAS API CON PREFIJO /api - USAR RUTAS EXISTENTES
 // ==========================================
-// Ventas
+// Ventas - ADMIN y EMPLOYEE
 router.use('/api/sales', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), sale_routes_1.default);
-// Clientes
+// Clientes - ADMIN y EMPLOYEE
 router.use('/api/clients', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), client_routes_1.default);
-// Productos
+// Productos - ADMIN y EMPLOYEE
 router.use('/api/products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), product_routes_1.default);
 // Stock - Solo ADMIN
 router.use('/api/stock', (0, rbac_1.requireRole)(['ADMIN']), stock_routes_1.default);
@@ -226,67 +191,23 @@ router.use('/api/ai/loyalty', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), lo
 // Usuarios - ADMIN y SUPER_ADMIN
 router.use('/api/users', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), user_routes_1.default);
 // ==========================================
-// RUTA PARA OBTENER MÓDULOS POR ROL (sin prefijo)
-// ==========================================
-router.get('/modules', (0, rbac_1.requireRole)(['SUPER_ADMIN', 'ADMIN', 'EMPLOYEE']), async (req, res) => {
-    try {
-        const userRole = req.user?.role;
-        const modules = {
-            SUPER_ADMIN: [
-                { name: 'Dashboard', path: '/admin/dashboard', icon: 'LayoutDashboard' },
-                { name: 'Farmacias', path: '/admin/pharmacies', icon: 'Store' },
-                { name: 'Suscripciones', path: '/admin/subscriptions', icon: 'CreditCard' },
-                { name: 'Usuarios Globales', path: '/admin/users', icon: 'Users' },
-                { name: 'Comunicación', path: '/admin/broadcast', icon: 'Bell' },
-                { name: 'Semáforo Salud', path: '/admin/health', icon: 'Activity' },
-                { name: 'Auditoría', path: '/admin/logs', icon: 'FileText' }
-            ],
-            ADMIN: [
-                { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
-                { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
-                { name: 'Clientes', path: '/clients', icon: 'Users' },
-                { name: 'Productos', path: '/products', icon: 'Package' },
-                { name: 'Stock', path: '/stock', icon: 'Box' },
-                { name: 'Proveedores', path: '/suppliers', icon: 'Truck' },
-                { name: 'RRHH', path: '/hr', icon: 'Users' },
-                { name: 'Reportes', path: '/reports', icon: 'FileText' },
-                { name: 'Configuración', path: '/settings', icon: 'Settings' }
-            ],
-            EMPLOYEE: [
-                { name: 'Dashboard', path: '/dashboard', icon: 'LayoutDashboard' },
-                { name: 'Ventas', path: '/sales', icon: 'ShoppingCart' },
-                { name: 'Clientes', path: '/clients', icon: 'Users' },
-                { name: 'Productos', path: '/products', icon: 'Package' }
-            ]
-        };
-        const availableModules = modules[userRole] || [];
-        res.json({ success: true, data: availableModules });
-    }
-    catch (error) {
-        console.error('Error getting modules:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-// ==========================================
 // RUTAS SUPER_ADMIN (Protegidas) - sin prefijo
 // ==========================================
 console.log('  📌 Cargando rutas SUPER_ADMIN...');
-// Rutas de gestión de farmacias
+// Rutas específicas de SUPER_ADMIN - DEBEN IR ANTES del comodín
 router.get('/admin/pharmacies', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.getAll);
 router.post('/admin/pharmacies', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.create);
 router.put('/admin/pharmacies/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.update);
 router.delete('/admin/pharmacies/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.delete);
-// Rutas de gestión de usuarios globales
 router.get('/admin/users', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.getAllUsers);
 router.get('/admin/users/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.getUserById);
 router.post('/admin/users', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.createUser);
 router.put('/admin/users/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.updateUser);
 router.delete('/admin/users/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.deleteUser);
-// Estadísticas globales
 router.get('/admin/stats', (0, rbac_1.requireRole)(['SUPER_ADMIN']), dashboard_controller_1.dashboardController.getStockStats);
-// Rutas de semáforo de salud
+// Health status - DEBE IR ANTES del comodín
 router.get('/admin/health-status', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.getHealthStatus);
-// Rutas de logs de auditoría
+// Logs - DEBE IR ANTES del comodín
 router.get('/admin/logs', (0, rbac_1.requireRole)(['SUPER_ADMIN']), async (req, res) => {
     try {
         const { prisma } = await Promise.resolve().then(() => __importStar(require('../server')));
@@ -305,7 +226,7 @@ router.get('/admin/logs', (0, rbac_1.requireRole)(['SUPER_ADMIN']), async (req, 
         res.status(500).json({ success: false, message: error.message });
     }
 });
-// Todas las rutas de superadmin (suscripciones, broadcast, impersonate)
+// ¡ESTA LÍNEA DEBE IR AL FINAL! - Todas las rutas de superadmin (suscripciones, broadcast, impersonate)
 router.use('/admin', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_routes_1.default);
 // ==========================================
 // RUTAS DASHBOARD - ADMIN y EMPLOYEE (sin prefijo)
@@ -321,14 +242,14 @@ router.get('/dashboard/low-stock', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']
 router.get('/dashboard/quick-summary', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getQuickSummary);
 router.get('/dashboard/stock-stats', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getStockStats);
 // ==========================================
-// RUTAS SIN PREFIJO API (Compatibilidad) - SOLO ADMIN
+// RUTAS SIN PREFIJO API (Compatibilidad)
 // ==========================================
 console.log('  📌 Cargando rutas sin prefijo (compatibilidad)...');
-// Ventas
+// Ventas - ADMIN y EMPLOYEE
 router.use('/sales', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), sale_routes_1.default);
-// Clientes
+// Clientes - ADMIN y EMPLOYEE
 router.use('/clients', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), client_routes_1.default);
-// Productos
+// Productos - ADMIN y EMPLOYEE
 router.use('/products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), product_routes_1.default);
 // Proveedores - SOLO ADMIN
 router.get('/suppliers', (0, rbac_1.requireRole)(['ADMIN']), supplier_controller_1.supplierController.getAll);
@@ -339,13 +260,14 @@ router.delete('/suppliers/:id', (0, rbac_1.requireRole)(['ADMIN']), supplier_con
 // Stock - Solo ADMIN
 router.use('/stock', (0, rbac_1.requireRole)(['ADMIN']), stock_routes_1.default);
 router.use('/inventory', (0, rbac_1.requireRole)(['ADMIN']), inventory_routes_1.default);
+router.get('/api/stock/summary', (0, rbac_1.requireRole)(['ADMIN']), stock_controller_1.stockController.getSummary);
 // RRHH - Solo ADMIN
 router.use('/hr', (0, rbac_1.requireRole)(['ADMIN']), hr_routes_1.default);
 // Reportes - ADMIN y SUPER_ADMIN
 router.use('/reports', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), report_routes_1.default);
 // Configuración - Solo SUPER_ADMIN
 router.use('/settings', (0, rbac_1.requireRole)(['SUPER_ADMIN']), settings_routes_1.default);
-// Lealtad - ADMIN (configuración interna de la farmacia)
+// Lealtad - ADMIN
 router.use('/loyalty', (0, rbac_1.requireRole)(['ADMIN']), loyalty_routes_1.default);
 router.use('/loyalty-rewards', (0, rbac_1.requireRole)(['ADMIN']), loyaltyReward_routes_1.default);
 router.use('/loyalty-checkout', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), loyaltyCheckout_routes_1.default);

@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const delivery_controller_1 = require("../controllers/delivery.controller");
+const rbac_1 = require("../middleware/rbac");
+const router = (0, express_1.Router)();
+router.post('/deliveries', (0, rbac_1.requireRole)(['ADMIN']), delivery_controller_1.deliveryController.registerDelivery);
+router.post('/obligations/payments', (0, rbac_1.requireRole)(['ADMIN']), delivery_controller_1.deliveryController.registerObligationPayment);
+router.get('/suppliers/:supplierId/obligations', (0, rbac_1.requireRole)(['ADMIN']), delivery_controller_1.deliveryController.getSupplierObligations);
+exports.default = router;

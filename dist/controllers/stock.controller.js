@@ -7,8 +7,42 @@ exports.stockController = {
     async getAll(req, res) {
         try {
             const pharmacyFilter = req.pharmacyFilter || {};
-            const products = await server_1.prisma.inventory_lots.findMany({
-                where: pharmacyFilter,
+            const { search, category, zone, lab, page = 1, limit = 10 } = req.query;
+            // Primero, buscar productos que coincidan con el filtro
+            const productFilter = {};
+            if (search) {
+                productFilter.name = { contains: search, mode: 'insensitive' };
+            }
+            if (category) {
+                productFilter.category = category;
+            }
+            if (zone) {
+                productFilter.zone = zone;
+            }
+            if (lab) {
+                productFilter.laboratory = lab;
+            }
+            // Obtener IDs de productos que cumplen el filtro
+            const matchingProducts = await server_1.prisma.products.findMany({
+                where: productFilter,
+                select: { id: true }
+            });
+            const productIds = matchingProducts.map(p => p.id);
+            // Si hay filtro y no hay productos, devolver vacío
+            if ((search || category || zone || lab) && productIds.length === 0) {
+                return res.json({
+                    success: true,
+                    data: [],
+                    meta: { total: 0, page: 1, limit: 10, totalPages: 0 }
+                });
+            }
+            // Construir filtro para lotes
+            const lotWhere = { ...pharmacyFilter };
+            if (productIds.length > 0) {
+                lotWhere.product_id = { in: productIds };
+            }
+            const lots = await server_1.prisma.inventory_lots.findMany({
+                where: lotWhere,
                 include: {
                     product: {
                         select: {
@@ -17,7 +51,11 @@ exports.stockController = {
                             sku: true,
                             category: true,
                             pricePPV: true,
-                            pricePPH: true
+                            pricePPH: true,
+                            dosageForm: true,
+                            laboratory: true,
+                            zone: true,
+                            barcode: true
                         }
                     }
                 },
@@ -26,7 +64,7 @@ exports.stockController = {
                 }
             });
             // Agrupar por producto
-            const groupedProducts = products.reduce((acc, lot) => {
+            const groupedProducts = lots.reduce((acc, lot) => {
                 const productId = lot.product_id;
                 if (!acc[productId]) {
                     acc[productId] = {
@@ -44,9 +82,23 @@ exports.stockController = {
                 });
                 return acc;
             }, {});
+            // Convertir a array y paginar
+            let resultArray = Object.values(groupedProducts);
+            const total = resultArray.length;
+            const pageNum = parseInt(page);
+            const limitNum = parseInt(limit);
+            const start = (pageNum - 1) * limitNum;
+            const end = start + limitNum;
+            const paginatedResults = resultArray.slice(start, end);
             res.json({
                 success: true,
-                data: Object.values(groupedProducts)
+                data: paginatedResults,
+                meta: {
+                    total,
+                    page: pageNum,
+                    limit: limitNum,
+                    totalPages: Math.ceil(total / limitNum)
+                }
             });
         }
         catch (error) {
@@ -105,6 +157,75 @@ exports.stockController = {
         }
         catch (error) {
             console.error('Error getting low stock:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+    async getSummary(req, res) {
+        try {
+            const pharmacyFilter = req.pharmacyFilter || {};
+            // Total de productos con stock
+            const totalProducts = await server_1.prisma.inventory_lots.count({
+                where: {
+                    ...pharmacyFilter,
+                    quantity: { gt: 0 }
+                }
+            });
+            // Stock total
+            const totalStock = await server_1.prisma.inventory_lots.aggregate({
+                where: pharmacyFilter,
+                _sum: { quantity: true }
+            });
+            // Productos con stock bajo (< 10)
+            const lowStock = await server_1.prisma.inventory_lots.count({
+                where: {
+                    ...pharmacyFilter,
+                    quantity: { lt: 10, gt: 0 }
+                }
+            });
+            // Productos próximos a vencer (30 días)
+            const thirtyDaysFromNow = new Date();
+            thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+            const expiringSoon = await server_1.prisma.inventory_lots.count({
+                where: {
+                    ...pharmacyFilter,
+                    expiry_date: { lte: thirtyDaysFromNow, gt: new Date() },
+                    quantity: { gt: 0 }
+                }
+            });
+            // Productos vencidos
+            const expired = await server_1.prisma.inventory_lots.count({
+                where: {
+                    ...pharmacyFilter,
+                    expiry_date: { lt: new Date() },
+                    quantity: { gt: 0 }
+                }
+            });
+            // Valor total del inventario
+            const lotsWithProducts = await server_1.prisma.inventory_lots.findMany({
+                where: pharmacyFilter,
+                include: {
+                    product: {
+                        select: { pricePPH: true }
+                    }
+                }
+            });
+            const totalValue = lotsWithProducts.reduce((sum, lot) => {
+                return sum + (lot.quantity * Number(lot.product?.pricePPH || 0));
+            }, 0);
+            res.json({
+                success: true,
+                data: {
+                    total_products: totalProducts,
+                    total_stock: totalStock._sum.quantity || 0,
+                    low_stock: lowStock,
+                    expiring_soon: expiringSoon,
+                    expired: expired,
+                    total_value: totalValue
+                }
+            });
+        }
+        catch (error) {
+            console.error('Error getting stock summary:', error);
             res.status(500).json({ success: false, message: error.message });
         }
     },
