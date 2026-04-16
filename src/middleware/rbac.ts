@@ -10,12 +10,7 @@ export interface AuthRequest extends Request {
 }
 
 export const requireRole = (allowedRoles: string[]) => {
-  // LOG CRÍTICO - Ver qué recibe la función
-  console.log(`[RBAC DEBUG] ⚠️ requireRole INIT - allowedRoles recibido:`, allowedRoles);
-  console.log(`[RBAC DEBUG] ⚠️ requireRole INIT - stack:`, new Error().stack);
-  
   return (req: AuthRequest, res: Response, next: NextFunction) => {
-    console.log(`[RBAC DEBUG] Path: ${req.path} | URL: ${req.url} | Roles:`, allowedRoles);
     console.log('🔐 [requireRole] Iniciando...');
     console.log('🔐 [requireRole] req.user:', req.user);
     console.log('🔐 [requireRole] allowedRoles:', allowedRoles);
@@ -25,26 +20,28 @@ export const requireRole = (allowedRoles: string[]) => {
       return res.status(401).json({ success: false, message: 'No autenticado' });
     }
     
-    // FUERZA EMPLOYEE para rutas de dashboard y sales
-    let finalAllowedRoles = [...allowedRoles];
-    if (req.url.includes('/dashboard') || req.url.includes('/sales')) {
-      if (!finalAllowedRoles.includes('EMPLOYEE')) {
-        finalAllowedRoles.push('EMPLOYEE');
-        console.log(`[RBAC DEBUG] 🔧 FORZADO: Se añadió EMPLOYEE a ${req.url}`);
-      }
+    // 🔥 SOLUCIÓN: Mapear SUPER_ADMIN a ADMIN
+    let userRole = req.user.role;
+    let mappedRole = userRole;
+    
+    if (userRole === 'SUPER_ADMIN') {
+      console.log('🔄 [requireRole] Mapeando SUPER_ADMIN a ADMIN');
+      mappedRole = 'ADMIN';
     }
     
-    const userRole = req.user.role.toLowerCase();
-    const normalizedAllowed = finalAllowedRoles.map(r => r.toLowerCase());
+    const normalizedUserRole = mappedRole.toLowerCase();
+    const normalizedAllowed = allowedRoles.map(r => r.toLowerCase());
     
-    console.log('🔐 [requireRole] userRole (normalizado):', userRole);
-    console.log('🔐 [requireRole] normalizedAllowed:', normalizedAllowed);
+    console.log('🔐 [requireRole] Rol original:', userRole);
+    console.log('🔐 [requireRole] Rol mapeado:', mappedRole);
+    console.log('🔐 [requireRole] Rol normalizado:', normalizedUserRole);
+    console.log('🔐 [requireRole] Roles permitidos:', normalizedAllowed);
     
-    if (!normalizedAllowed.includes(userRole)) {
+    if (!normalizedAllowed.includes(normalizedUserRole)) {
       console.log(`❌ [requireRole] Rol ${req.user.role} no permitido`);
       return res.status(403).json({ 
         success: false, 
-        message: `No autorizado. Se requiere uno de estos roles: ${finalAllowedRoles.join(', ')}` 
+        message: `No autorizado. Se requiere uno de estos roles: ${allowedRoles.join(', ')}` 
       });
     }
     
