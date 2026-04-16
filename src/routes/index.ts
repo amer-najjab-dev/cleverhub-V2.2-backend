@@ -212,7 +212,7 @@ router.get('/admin/stats', requireRole(['SUPER_ADMIN']), dashboardController.get
 
 // Health status - DEBE IR ANTES del comodín
 console.log('🔧 DEFININDO ROTA /admin/health-status com requireRole:', ['SUPER_ADMIN']);
-router.get('/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
+//router.get('/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
 
 // Logs - DEBE IR ANTES del comodín
 router.get('/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => {
