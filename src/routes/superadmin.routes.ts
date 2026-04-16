@@ -18,9 +18,6 @@ router.post('/subscriptions/extend-courtesy', superAdminController.extendCourtes
 // Comunicación
 router.post('/broadcast', superAdminController.sendBroadcast);
 
-// Health check
-router.get('/health-status', requireRole(['SUPER_ADMIN']), superAdminController.getHealthStatus);
-
 // Impersonate
 router.post('/impersonate/:pharmacyId', superAdminController.impersonate);
 
