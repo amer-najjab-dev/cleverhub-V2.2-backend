@@ -20,24 +20,28 @@ export const requireRole = (allowedRoles: string[]) => {
       return res.status(401).json({ success: false, message: 'No autenticado' });
     }
     
-    // Normalizar el rol del usuario a MAYÚSCULAS
-    let userRole = req.user.role.toUpperCase();
-    
-    // Mapear SUPER_ADMIN a ADMIN (si quieres que tenga acceso a rutas de ADMIN)
+    let userRole = req.user.role;
     let mappedRole = userRole;
-    if (userRole === 'SUPER_ADMIN') {
-      console.log('🔄 [requireRole] Mapeando SUPER_ADMIN a ADMIN');
+    
+    // SOLO mapear SUPER_ADMIN a ADMIN si ADMIN está en los roles permitidos
+    // y SUPER_ADMIN NO está en los roles permitidos
+    const needsAdmin = allowedRoles.includes('ADMIN') && !allowedRoles.includes('SUPER_ADMIN');
+    
+    if (userRole === 'SUPER_ADMIN' && needsAdmin) {
+      console.log('🔄 [requireRole] Mapeando SUPER_ADMIN a ADMIN (ruta requiere ADMIN)');
       mappedRole = 'ADMIN';
+    } else {
+      console.log('🔐 [requireRole] Manteniendo rol original:', userRole);
     }
     
-    // Normalizar los roles permitidos a MAYÚSCULAS
-    const normalizedAllowed = allowedRoles.map(r => r.toUpperCase());
+    const normalizedUserRole = mappedRole.toLowerCase();
+    const normalizedAllowed = allowedRoles.map(r => r.toLowerCase());
     
     console.log('🔐 [requireRole] Rol original:', userRole);
     console.log('🔐 [requireRole] Rol mapeado:', mappedRole);
-    console.log('🔐 [requireRole] Roles permitidos:', normalizedAllowed);
+    console.log('🔐 [requireRole] Roles permitidos:', allowedRoles);
     
-    if (!normalizedAllowed.includes(mappedRole)) {
+    if (!normalizedAllowed.includes(normalizedUserRole)) {
       console.log(`❌ [requireRole] Rol ${req.user.role} no permitido`);
       return res.status(403).json({ 
         success: false, 
