@@ -145,7 +145,7 @@ router.use('/admin', requireRole(['SUPER_ADMIN']), superAdminRoutes);
 console.log('  📌 Cargando rutas DASHBOARD...');
 
 // Dashboard sin prefijo
-router.get('/dashboard', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getDashboard);
+router.get('/dashboard', requireRole(['ADMIN']), dashboardController.getDashboard);
 router.get('/dashboard/kpis', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getKPIs);
 router.get('/dashboard/hourly-sales', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getHourlySales);
 router.get('/dashboard/comparative', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getComparativeData);
@@ -227,16 +227,16 @@ router.use('/api/sales', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), saleRou
 router.use('/sales', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), saleRoutes);
 
 // Clientes
-router.use('/api/clients', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), clientRoutes);
-router.use('/clients', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), clientRoutes);
+router.use('/api/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
+router.use('/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
 
 // Productos
 router.use('/api/products', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), productRoutes);
 router.use('/products', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), productRoutes);
 
 // Proveedores - CORREGIDO: una sola definición consistente
-router.use('/api/suppliers', requireRole(['ADMIN', 'AUXILIAR']), supplierRoutes);
-router.use('/suppliers', requireRole(['ADMIN', 'AUXILIAR']), supplierRoutes);
+router.use('/api/suppliers', requireRole(['ADMIN', 'EMPLOYEE']), supplierRoutes);
+router.use('/suppliers', requireRole(['ADMIN']), supplierRoutes);
 
 console.log('✅ Todas las rutas cargadas correctamente con RBAC');
 
