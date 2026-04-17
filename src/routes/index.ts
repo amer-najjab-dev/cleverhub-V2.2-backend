@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { requireRole } from '../middleware/rbac';
 import { superAdminController } from '../controllers/superadmin.controller';
 import { checkExpirations } from '../controllers/superadmin.controller';
@@ -46,6 +46,17 @@ const router = Router();
 
 console.log('🔄 Cargando rutas con sistema RBAC multi-tenant...');
 
+// Middleware condicional para AUXILIAR
+const ifAuxiliar = (req: Request, res: Response, next: NextFunction) => {
+  const userRole = (req as any).user?.role;
+  if (userRole === 'AUXILIAR') {
+    console.log('🔀 [ifAuxiliar] Usuario AUXILIAR, usando ruta específica');
+    return next();
+  }
+  console.log('🔀 [ifAuxiliar] Usuario no es AUXILIAR, continuando con siguiente ruta');
+  next('route');
+};
+
 // ==========================================
 // RUTAS PÚBLICAS (Sin autenticación)
 // ==========================================
@@ -86,14 +97,14 @@ router.get('/admin/cron/check-expirations', async (req, res) => {
 // ==========================================
 
 // ==========================================
-// RUTAS PARA ROL AUXILIAR (DEBEN IR PRIMERO)
+// RUTAS PARA ROL AUXILIAR (con middleware condicional)
 // ==========================================
-console.log('  📌 Cargando rutas para rol AUXILIAR...');
+console.log('  📌 Cargando rutas condicionales para rol AUXILIAR...');
 
-router.use('/api/sales', requireRole(['AUXILIAR']), saleRoutes);
-router.use('/api/clients', requireRole(['AUXILIAR']), clientRoutes);
-router.use('/api/products', requireRole(['AUXILIAR']), productRoutes);
-router.use('/api/suppliers', requireRole(['AUXILIAR']), supplierRoutes);
+router.use('/api/sales', ifAuxiliar, requireRole(['AUXILIAR']), saleRoutes);
+router.use('/api/clients', ifAuxiliar, requireRole(['AUXILIAR']), clientRoutes);
+router.use('/api/products', ifAuxiliar, requireRole(['AUXILIAR']), productRoutes);
+router.use('/api/suppliers', ifAuxiliar, requireRole(['AUXILIAR']), supplierRoutes);
 
 // ==========================================
 // RUTAS API CON PREFIJO /api - USAR RUTAS EXISTENTES
@@ -285,12 +296,12 @@ router.use('/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes);
 router.use('/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 
 // ==========================================
-// RUTAS SIN PREFIJO PARA AUXILIAR
+// RUTAS SIN PREFIJO PARA AUXILIAR (con middleware condicional)
 // ==========================================
-router.use('/products', requireRole(['AUXILIAR']), productRoutes);
-router.use('/clients', requireRole(['AUXILIAR']), clientRoutes);
-router.use('/sales', requireRole(['AUXILIAR']), saleRoutes);
-router.use('/suppliers', requireRole(['AUXILIAR']), supplierRoutes);
+router.use('/products', ifAuxiliar, requireRole(['AUXILIAR']), productRoutes);
+router.use('/clients', ifAuxiliar, requireRole(['AUXILIAR']), clientRoutes);
+router.use('/sales', ifAuxiliar, requireRole(['AUXILIAR']), saleRoutes);
+router.use('/suppliers', ifAuxiliar, requireRole(['AUXILIAR']), supplierRoutes);
 
 console.log('✅ Todas las rutas cargadas correctamente con RBAC');
 
