@@ -85,6 +85,20 @@ router.get('/admin/cron/check-expirations', async (req, res) => {
 // RUTAS CON PREFIJO /api (para compatibilidad con frontend)
 // ==========================================
 
+// ==========================================
+// RUTAS PARA ROL AUXILIAR (DEBEN IR PRIMERO)
+// ==========================================
+console.log('  📌 Cargando rutas para rol AUXILIAR...');
+
+router.use('/api/sales', requireRole(['AUXILIAR']), saleRoutes);
+router.use('/api/clients', requireRole(['AUXILIAR']), clientRoutes);
+router.use('/api/products', requireRole(['AUXILIAR']), productRoutes);
+router.use('/api/suppliers', requireRole(['AUXILIAR']), supplierRoutes);
+
+// ==========================================
+// RUTAS API CON PREFIJO /api - USAR RUTAS EXISTENTES
+// ==========================================
+
 // Dashboard endpoints - ADMIN y EMPLOYEE
 router.get('/api/dashboard/kpis', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getKPIs);
 router.get('/api/dashboard/hourly-sales', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getHourlySales);
@@ -150,10 +164,6 @@ router.get('/api/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => 
   }
 });
 
-// ==========================================
-// RUTAS API CON PREFIJO /api - USAR RUTAS EXISTENTES
-// ==========================================
-
 // Ventas - ADMIN y EMPLOYEE
 router.use('/api/sales', requireRole(['ADMIN', 'EMPLOYEE']), saleRoutes);
 
@@ -195,23 +205,6 @@ router.use('/api/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes)
 
 // Usuarios - ADMIN y SUPER_ADMIN
 router.use('/api/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
-
-// ==========================================
-// RUTAS PARA ROL AUXILIAR (Nuevas, separadas - NO TOCAR LAS EXISTENTES)
-// ==========================================
-console.log('  📌 Cargando rutas para rol AUXILIAR...');
-
-// Ventas - AUXILIAR (ruta adicional, no reemplaza la existente)
-router.use('/api/sales', requireRole(['AUXILIAR']), saleRoutes);
-
-// Clientes - AUXILIAR (ruta adicional, no reemplaza la existente)
-router.use('/api/clients', requireRole(['AUXILIAR']), clientRoutes);
-
-// Productos - AUXILIAR (ruta adicional, no reemplaza la existente)
-router.use('/api/products', requireRole(['AUXILIAR']), productRoutes);
-
-// Proveedores - AUXILIAR (ruta adicional, no reemplaza la existente)
-router.use('/api/suppliers', requireRole(['AUXILIAR']), supplierRoutes);
 
 // ==========================================
 // RUTAS SUPER_ADMIN (Protegidas) - sin prefijo
@@ -291,7 +284,6 @@ router.use('/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes);
 // Usuarios - ADMIN y SUPER_ADMIN
 router.use('/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 
-console.log('✅ Todas las rutas cargadas correctamente con RBAC');
 // ==========================================
 // RUTAS SIN PREFIJO PARA AUXILIAR
 // ==========================================
@@ -300,5 +292,6 @@ router.use('/clients', requireRole(['AUXILIAR']), clientRoutes);
 router.use('/sales', requireRole(['AUXILIAR']), saleRoutes);
 router.use('/suppliers', requireRole(['AUXILIAR']), supplierRoutes);
 
+console.log('✅ Todas las rutas cargadas correctamente con RBAC');
 
 export default router;
