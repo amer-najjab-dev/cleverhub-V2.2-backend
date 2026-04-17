@@ -231,8 +231,8 @@ router.use('/api/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
 router.use('/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
 
 // Productos - EMPLOYEE
-router.use('/api/products', requireRole(['ADMIN', 'EMPLOYEE']), productRoutes);
-router.use('/products', requireRole(['ADMIN', 'EMPLOYEE']), productRoutes);
+router.use('/api/products', requireRole(['ADMIN', 'EMPLOYEE' , 'AUXILIAR']), productRoutes);
+router.use('/products', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), productRoutes);
 
 // Proveedores - EMPLOYEE (SÍ tiene acceso)
 router.use('/api/suppliers', requireRole(['ADMIN', 'EMPLOYEE']), supplierRoutes);
