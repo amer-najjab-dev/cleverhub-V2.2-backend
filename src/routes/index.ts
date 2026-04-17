@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import { requireRole } from '../middleware/rbac';
 import { superAdminController } from '../controllers/superadmin.controller';
 import { checkExpirations } from '../controllers/superadmin.controller';
@@ -46,17 +46,6 @@ const router = Router();
 
 console.log('🔄 Cargando rutas con sistema RBAC multi-tenant...');
 
-// Middleware condicional para AUXILIAR
-const ifAuxiliar = (req: Request, res: Response, next: NextFunction) => {
-  const userRole = (req as any).user?.role;
-  if (userRole === 'AUXILIAR') {
-    console.log('🔀 [ifAuxiliar] Usuario AUXILIAR, usando ruta específica');
-    return next();
-  }
-  console.log('🔀 [ifAuxiliar] Usuario no es AUXILIAR, continuando con siguiente ruta');
-  next('route');
-};
-
 // ==========================================
 // RUTAS PÚBLICAS (Sin autenticación)
 // ==========================================
@@ -96,21 +85,7 @@ router.get('/admin/cron/check-expirations', async (req, res) => {
 // RUTAS CON PREFIJO /api (para compatibilidad con frontend)
 // ==========================================
 
-// ==========================================
-// RUTAS PARA ROL AUXILIAR (con middleware condicional)
-// ==========================================
-console.log('  📌 Cargando rutas condicionales para rol AUXILIAR...');
-
-router.use('/api/sales', ifAuxiliar, requireRole(['AUXILIAR']), saleRoutes);
-router.use('/api/clients', ifAuxiliar, requireRole(['AUXILIAR']), clientRoutes);
-router.use('/api/products', ifAuxiliar, requireRole(['AUXILIAR']), productRoutes);
-router.use('/api/suppliers', ifAuxiliar, requireRole(['AUXILIAR']), supplierRoutes);
-
-// ==========================================
-// RUTAS API CON PREFIJO /api - USAR RUTAS EXISTENTES
-// ==========================================
-
-// Dashboard endpoints - ADMIN y EMPLOYEE
+// Dashboard endpoints - ADMIN y EMPLOYEE (AUXILIAR no tiene acceso a dashboard)
 router.get('/api/dashboard/kpis', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getKPIs);
 router.get('/api/dashboard/hourly-sales', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getHourlySales);
 router.get('/api/dashboard/comparative', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getComparativeData);
@@ -175,23 +150,27 @@ router.get('/api/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => 
   }
 });
 
-// Ventas - ADMIN y EMPLOYEE
-router.use('/api/sales', requireRole(['ADMIN', 'EMPLOYEE']), saleRoutes);
+// ==========================================
+// RUTAS API CON PREFIJO /api - ADMIN, EMPLOYEE y AUXILIAR
+// ==========================================
 
-// Clientes - ADMIN y EMPLOYEE
-router.use('/api/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
+// Ventas - ADMIN, EMPLOYEE y AUXILIAR
+router.use('/api/sales', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), saleRoutes);
 
-// Productos - ADMIN y EMPLOYEE
-router.use('/api/products', requireRole(['ADMIN', 'EMPLOYEE']), productRoutes);
+// Clientes - ADMIN, EMPLOYEE y AUXILIAR
+router.use('/api/clients', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), clientRoutes);
+
+// Productos - ADMIN, EMPLOYEE y AUXILIAR
+router.use('/api/products', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), productRoutes);
+
+// Proveedores - ADMIN, EMPLOYEE y AUXILIAR
+router.use('/api/suppliers', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), supplierRoutes);
 
 // Stock - Solo ADMIN
 router.use('/api/stock', requireRole(['ADMIN']), stockRoutes);
 
 // Inventario - Solo ADMIN
 router.use('/api/inventory', requireRole(['ADMIN']), inventoryRoutes);
-
-// Proveedores - Solo ADMIN
-router.use('/api/suppliers', requireRole(['ADMIN']), supplierRoutes);
 
 // RRHH - Solo ADMIN
 router.use('/api/hr', requireRole(['ADMIN']), hrRoutes);
@@ -248,16 +227,16 @@ router.get('/dashboard/stock-stats', requireRole(['ADMIN', 'EMPLOYEE']), dashboa
 // ==========================================
 console.log('  📌 Cargando rutas sin prefijo (compatibilidad)...');
 
-// Ventas - ADMIN y EMPLOYEE
-router.use('/sales', requireRole(['ADMIN', 'EMPLOYEE']), saleRoutes);
+// Ventas - ADMIN, EMPLOYEE y AUXILIAR
+router.use('/sales', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), saleRoutes);
 
-// Clientes - ADMIN y EMPLOYEE
-router.use('/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
+// Clientes - ADMIN, EMPLOYEE y AUXILIAR
+router.use('/clients', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), clientRoutes);
 
-// Productos - ADMIN y EMPLOYEE
-router.use('/products', requireRole(['ADMIN', 'EMPLOYEE']), productRoutes);
+// Productos - ADMIN, EMPLOYEE y AUXILIAR
+router.use('/products', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), productRoutes);
 
-// Proveedores - SOLO ADMIN
+// Proveedores - SOLO ADMIN (sin AUXILIAR)
 router.get('/suppliers', requireRole(['ADMIN']), supplierController.getAll);
 router.get('/suppliers/:id', requireRole(['ADMIN']), supplierController.getById);
 router.post('/suppliers', requireRole(['ADMIN']), supplierController.create);
@@ -294,14 +273,6 @@ router.use('/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes);
 
 // Usuarios - ADMIN y SUPER_ADMIN
 router.use('/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
-
-// ==========================================
-// RUTAS SIN PREFIJO PARA AUXILIAR (con middleware condicional)
-// ==========================================
-router.use('/products', ifAuxiliar, requireRole(['AUXILIAR']), productRoutes);
-router.use('/clients', ifAuxiliar, requireRole(['AUXILIAR']), clientRoutes);
-router.use('/sales', ifAuxiliar, requireRole(['AUXILIAR']), saleRoutes);
-router.use('/suppliers', ifAuxiliar, requireRole(['AUXILIAR']), supplierRoutes);
 
 console.log('✅ Todas las rutas cargadas correctamente con RBAC');
 
