@@ -197,20 +197,20 @@ router.use('/api/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes)
 router.use('/api/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 
 // ==========================================
-// RUTAS PARA ROL AUXILIAR (Nuevas, separadas)
+// RUTAS PARA ROL AUXILIAR (Nuevas, separadas - NO TOCAR LAS EXISTENTES)
 // ==========================================
 console.log('  📌 Cargando rutas para rol AUXILIAR...');
 
-// Ventas - AUXILIAR
+// Ventas - AUXILIAR (ruta adicional, no reemplaza la existente)
 router.use('/api/sales', requireRole(['AUXILIAR']), saleRoutes);
 
-// Clientes - AUXILIAR
+// Clientes - AUXILIAR (ruta adicional, no reemplaza la existente)
 router.use('/api/clients', requireRole(['AUXILIAR']), clientRoutes);
 
-// Productos - AUXILIAR
+// Productos - AUXILIAR (ruta adicional, no reemplaza la existente)
 router.use('/api/products', requireRole(['AUXILIAR']), productRoutes);
 
-// Proveedores - AUXILIAR
+// Proveedores - AUXILIAR (ruta adicional, no reemplaza la existente)
 router.use('/api/suppliers', requireRole(['AUXILIAR']), supplierRoutes);
 
 // ==========================================
