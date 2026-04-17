@@ -292,5 +292,13 @@ router.use('/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes);
 router.use('/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 
 console.log('✅ Todas las rutas cargadas correctamente con RBAC');
+// ==========================================
+// RUTAS SIN PREFIJO PARA AUXILIAR
+// ==========================================
+router.use('/products', requireRole(['AUXILIAR']), productRoutes);
+router.use('/clients', requireRole(['AUXILIAR']), clientRoutes);
+router.use('/sales', requireRole(['AUXILIAR']), saleRoutes);
+router.use('/suppliers', requireRole(['AUXILIAR']), supplierRoutes);
+
 
 export default router;
