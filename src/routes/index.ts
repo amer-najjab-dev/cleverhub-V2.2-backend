@@ -140,33 +140,33 @@ router.get('/admin/health-status', requireRole(['SUPER_ADMIN']), superAdminContr
 router.use('/admin', requireRole(['SUPER_ADMIN']), superAdminRoutes);
 
 // ==========================================
-// RUTAS DASHBOARD
+// RUTAS DASHBOARD - SOLO ADMIN (EMPLOYEE y AUXILIAR NO)
 // ==========================================
 console.log('  📌 Cargando rutas DASHBOARD...');
 
-// Dashboard sin prefijo
+// Dashboard sin prefijo - SOLO ADMIN
 router.get('/dashboard', requireRole(['ADMIN']), dashboardController.getDashboard);
-router.get('/dashboard/kpis', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getKPIs);
-router.get('/dashboard/hourly-sales', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getHourlySales);
-router.get('/dashboard/comparative', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getComparativeData);
-router.get('/dashboard/top-products', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getTopProducts);
-router.get('/dashboard/average-ticket', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getAverageTicket);
-router.get('/dashboard/low-stock', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getLowStockCount);
-router.get('/dashboard/quick-summary', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getQuickSummary);
-router.get('/dashboard/stock-stats', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getStockStats);
+router.get('/dashboard/kpis', requireRole(['ADMIN']), dashboardController.getKPIs);
+router.get('/dashboard/hourly-sales', requireRole(['ADMIN']), dashboardController.getHourlySales);
+router.get('/dashboard/comparative', requireRole(['ADMIN']), dashboardController.getComparativeData);
+router.get('/dashboard/top-products', requireRole(['ADMIN']), dashboardController.getTopProducts);
+router.get('/dashboard/average-ticket', requireRole(['ADMIN']), dashboardController.getAverageTicket);
+router.get('/dashboard/low-stock', requireRole(['ADMIN']), dashboardController.getLowStockCount);
+router.get('/dashboard/quick-summary', requireRole(['ADMIN']), dashboardController.getQuickSummary);
+router.get('/dashboard/stock-stats', requireRole(['ADMIN']), dashboardController.getStockStats);
 
-// Dashboard con prefijo /api
-router.get('/api/dashboard/kpis', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getKPIs);
-router.get('/api/dashboard/hourly-sales', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getHourlySales);
-router.get('/api/dashboard/comparative', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getComparativeData);
-router.get('/api/dashboard/top-products', requireRole(['ADMIN', 'EMPLOYEE']), dashboardController.getTopProducts);
+// Dashboard con prefijo /api - SOLO ADMIN
+router.get('/api/dashboard/kpis', requireRole(['ADMIN']), dashboardController.getKPIs);
+router.get('/api/dashboard/hourly-sales', requireRole(['ADMIN']), dashboardController.getHourlySales);
+router.get('/api/dashboard/comparative', requireRole(['ADMIN']), dashboardController.getComparativeData);
+router.get('/api/dashboard/top-products', requireRole(['ADMIN']), dashboardController.getTopProducts);
 
 // ==========================================
 // RUTAS ADMIN (exclusivas)
 // ==========================================
 console.log('  📌 Cargando rutas ADMIN...');
 
-// Delivery routes - CORREGIDO: prefijo específico, NO genérico
+// Delivery routes
 router.use('/api/delivery', requireRole(['ADMIN']), deliveryRoutes);
 
 // Stock
@@ -193,7 +193,7 @@ router.use('/loyalty-config', requireRole(['ADMIN']), loyaltyConfigRoutes);
 router.use('/api/loyalty-checkout', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyCheckoutRoutes);
 router.use('/loyalty-checkout', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyCheckoutRoutes);
 
-// Settings - CORREGIDO: consistencia
+// Settings
 router.use('/api/settings', requireRole(['ADMIN']), settingsRoutes);
 router.use('/settings', requireRole(['ADMIN']), settingsRoutes);
 
@@ -218,25 +218,40 @@ router.use('/ai/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientIntelligence
 router.use('/ai/loyalty', requireRole(['ADMIN', 'EMPLOYEE']), loyaltyRoutes);
 
 // ==========================================
-// RUTAS COMPARTIDAS (ADMIN, EMPLOYEE, AUXILIAR)
+// RUTAS EMPLOYEE (con sus permisos)
 // ==========================================
-console.log('  📌 Cargando rutas compartidas (ADMIN, EMPLOYEE, AUXILIAR)...');
+console.log('  📌 Cargando rutas EMPLOYEE...');
 
-// Ventas
-router.use('/api/sales', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), saleRoutes);
-router.use('/sales', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), saleRoutes);
+// Ventas - EMPLOYEE
+router.use('/api/sales', requireRole(['ADMIN', 'EMPLOYEE']), saleRoutes);
+router.use('/sales', requireRole(['ADMIN', 'EMPLOYEE']), saleRoutes);
 
-// Clientes
+// Clientes - EMPLOYEE
 router.use('/api/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
 router.use('/clients', requireRole(['ADMIN', 'EMPLOYEE']), clientRoutes);
 
-// Productos
-router.use('/api/products', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), productRoutes);
-router.use('/products', requireRole(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), productRoutes);
+// Productos - EMPLOYEE
+router.use('/api/products', requireRole(['ADMIN', 'EMPLOYEE']), productRoutes);
+router.use('/products', requireRole(['ADMIN', 'EMPLOYEE']), productRoutes);
 
-// Proveedores - CORREGIDO: una sola definición consistente
+// Proveedores - EMPLOYEE (SÍ tiene acceso)
 router.use('/api/suppliers', requireRole(['ADMIN', 'EMPLOYEE']), supplierRoutes);
-router.use('/suppliers', requireRole(['ADMIN']), supplierRoutes);
+router.use('/suppliers', requireRole(['ADMIN', 'EMPLOYEE']), supplierRoutes);
+
+// ==========================================
+// RUTAS AUXILIAR (solo ventas y productos)
+// ==========================================
+console.log('  📌 Cargando rutas AUXILIAR...');
+
+// Ventas - AUXILIAR
+router.use('/api/sales', requireRole(['AUXILIAR']), saleRoutes);
+router.use('/sales', requireRole(['AUXILIAR']), saleRoutes);
+
+// Productos - AUXILIAR
+router.use('/api/products', requireRole(['AUXILIAR']), productRoutes);
+router.use('/products', requireRole(['AUXILIAR']), productRoutes);
+
+// NOTA: AUXILIAR NO tiene acceso a clientes, proveedores, dashboard
 
 console.log('✅ Todas las rutas cargadas correctamente con RBAC');
 
