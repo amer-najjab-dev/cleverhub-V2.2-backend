@@ -19,7 +19,7 @@ export class LoyaltyCheckoutController {
         });
       }
 
-      const rewards = await prisma.loyalty_reward.findMany({
+      const rewards = await prisma.loyalty_rewards.findMany({
         where: {
           is_active: true,
           AND: [
@@ -100,7 +100,7 @@ export class LoyaltyCheckoutController {
         });
       }
 
-      const packs = await prisma.loyalty_pack.findMany({
+      const packs = await prisma.loyalty_packs.findMany({
         where: {
           is_active: true,
           AND: [
@@ -170,9 +170,9 @@ export class LoyaltyCheckoutController {
         prisma.clients.findUnique({
           where: { id: parseInt(clientId) },
         }),
-        prisma.loyalty_reward.findUnique({
+        prisma.loyalty_rewards.findUnique({
           where: { id: parseInt(rewardId) },
-          include: { product: true },
+          include: { products: true },
         }),
       ]);
 
@@ -229,7 +229,7 @@ export class LoyaltyCheckoutController {
         prisma.clients.findUnique({
           where: { id: parseInt(clientId) },
         }),
-        prisma.loyalty_pack.findUnique({
+        prisma.loyalty_packs.findUnique({
           where: { id: parseInt(packId) },
           include: {
             products: {

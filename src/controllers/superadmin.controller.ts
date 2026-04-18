@@ -110,7 +110,7 @@ export class SuperAdminController {
   // ==========================================
   
   // Obtener todas las suscripciones con filtros
-  async getSubscriptions(req: Request, res: Response) {
+  async getsubscriptions(req: Request, res: Response) {
     try {
       const { status, plan, search } = req.query;
       
@@ -132,10 +132,11 @@ export class SuperAdminController {
           pharmacy: {
             select: { id: true, name: true, license: true, email: true, phone: true }
           },
-          payments: {
+          PaymentLog: {
             take: 1,
             orderBy: { created_at: 'desc' }
           }
+
         },
         orderBy: { end_date: 'asc' }
       });
@@ -147,7 +148,7 @@ export class SuperAdminController {
   }
   
   // Obtener suscripción de una farmacia específica
-  async getPharmacySubscription(req: Request, res: Response) {
+  async getPharmacysubscription(req: Request, res: Response) {
     try {
       const { pharmacyId } = req.params;
       
@@ -170,7 +171,7 @@ export class SuperAdminController {
   }
   
   // Crear o actualizar suscripción (inicial)
-  async createSubscription(req: Request, res: Response) {
+  async createsubscription(req: Request, res: Response) {
     try {
       const { pharmacy_id, plan, trial_days = 30 } = req.body;
       
@@ -201,7 +202,9 @@ export class SuperAdminController {
           start_date: startDate,
           end_date: endDate,
           status: 'TRIAL',
-          trial_end_date: endDate
+          trial_end_date: endDate,
+          created_at: new Date(),
+          updated_at: new Date()
         }
       });
       
@@ -352,25 +355,25 @@ ${newEndDate.toLocaleDateString()}`,
           pharmacies = await prisma.pharmacy.findMany({
             where: {
               is_active: true,
-              subscription: { status: 'ACTIVE' }
+              Subscription: { status: 'ACTIVE' }
             },
-            include: { subscription: true }
+            include: { Subscription: true }
           });
           break;
         case 'GRACE_PERIOD':
           pharmacies = await prisma.pharmacy.findMany({
             where: {
-              subscription: { status: 'GRACE_PERIOD' }
+              Subscription: { status: 'GRACE_PERIOD' }
             },
-            include: { subscription: true }
+            include: { Subscription: true }
           });
           break;
         case 'SUSPENDED':
           pharmacies = await prisma.pharmacy.findMany({
             where: {
-              subscription: { status: 'SUSPENDED' }
+              Subscription: { status: 'SUSPENDED' }
             },
-            include: { subscription: true }
+            include: { Subscription: true }
           });
           break;
         case 'SPECIFIC_PHARMACY':
@@ -463,12 +466,12 @@ ${newEndDate.toLocaleDateString()}`,
       };
       
       for (const pharmacy of allPharmacies) {
-        const subscription = pharmacy.subscription;
-        const hasRecentSales = pharmacy._count.sales > 0;
+        const subscription = (pharmacy as any).subscription;
+        const hasRecentSales = (pharmacy as any)._count?.sales > 0;
         const expiringSoon = subscription?.end_date && isBefore(subscription.end_date, days10);
         const isSuspended = subscription?.status === 'SUSPENDED';
         
-        if (isSuspended || (!hasRecentSales && pharmacy._count.sales === 0)) {
+        if (isSuspended || (!hasRecentSales && (pharmacy as any)._count?.sales === 0)) {
           status.red.push({
             id: pharmacy.id,
             name: pharmacy.name,

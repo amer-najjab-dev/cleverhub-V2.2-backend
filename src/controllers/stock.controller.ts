@@ -62,7 +62,7 @@ export const stockController = {
       const lots = await prisma.inventory_lots.findMany({
         where: lotWhere,
         include: {
-          product: {
+          products: {
             select: {
               id: true,
               name: true,
@@ -87,7 +87,7 @@ export const stockController = {
         const productId = lot.product_id;
         if (!acc[productId]) {
           acc[productId] = {
-            product: lot.product,
+            products: lot.products,
             total_quantity: 0,
             lots: []
           };
@@ -140,7 +140,7 @@ export const stockController = {
           expiry_date: { gt: new Date() }
         },
         include: {
-          product: {
+          products: {
             select: {
               id: true,
               name: true,
@@ -159,7 +159,7 @@ export const stockController = {
         const productId = lot.product_id;
         if (!acc[productId]) {
           acc[productId] = {
-            product: lot.product,
+            products: lot.products,
             total_quantity: 0,
             lots: []
           };
@@ -235,14 +235,14 @@ export const stockController = {
       const lotsWithProducts = await prisma.inventory_lots.findMany({
         where: pharmacyFilter,
         include: {
-          product: {
+          products: {
             select: { pricePPH: true }
           }
         }
       });
       
       const totalValue = lotsWithProducts.reduce((sum, lot) => {
-        return sum + (lot.quantity * Number(lot.product?.pricePPH || 0));
+        return sum + (lot.quantity * Number(lot.products?.pricePPH || 0));
       }, 0);
       
       res.json({
@@ -280,7 +280,7 @@ export const stockController = {
           quantity: { gt: 0 }
         },
         include: {
-          product: {
+          products: {
             select: {
               id: true,
               name: true,
@@ -299,7 +299,7 @@ export const stockController = {
         const productId = lot.product_id;
         if (!acc[productId]) {
           acc[productId] = {
-            product: lot.product,
+            products: lot.products,
             total_quantity: 0,
             lots: []
           };
@@ -346,7 +346,7 @@ export const stockController = {
       const movements = await prisma.stock_movements.findMany({
         where,
         include: {
-          product: {
+          products: {
             select: {
               id: true,
               name: true,

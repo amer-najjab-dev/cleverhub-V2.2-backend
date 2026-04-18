@@ -239,7 +239,7 @@ export class VentaController {
         },
         include: {
           sale_items: true,
-          client: true,
+          clients: true,
           user: true,
           payments: true
         }
@@ -249,7 +249,7 @@ export class VentaController {
       if (debtsToCreate.length > 0) {
         for (const debt of debtsToCreate) {
           // Siempre crear una nueva deuda, no consolidar
-          await prisma.client_debt.create({
+          await prisma.client_debts.create({
             data: {
               client_id: debt.client_id,
               total_debt: debt.total_debt,
@@ -329,10 +329,10 @@ export class VentaController {
         include: {
           sale_items: {
             include: {
-              product: true
+              products: true
             }
           },
-          client: true,
+          clients: true,
           user: true,
           payments: true
         }
@@ -392,11 +392,11 @@ export class VentaController {
       const ventas = await prisma.sales.findMany({
         where,
         include: {
-          client: true,
+          clients: true,
           user: true,
           sale_items: {
             include: {
-              product: true
+              products: true
             }
           },
           payments: true
@@ -458,7 +458,7 @@ export class VentaController {
           }
         },
         include: {
-          client: true,
+          clients: true,
           user: true,
           sale_items: true,
           payments: true
@@ -517,10 +517,10 @@ export class VentaController {
           }
         },
         include: {
-          client: true,
+          clients: true,
           sale_items: {
             include: {
-              product: true
+              products: true
             }
           }
         },

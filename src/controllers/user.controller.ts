@@ -156,12 +156,13 @@ export class UserController {
       const user = await prisma.users.create({
         data: {
           email,
+          full_name,
           password: hashedPassword,
-          full_name: full_name,
           role,
           is_active: true,
-          // Asignar farmacia según el rol
-          pharmacy_id: role === 'SUPER_ADMIN' ? null : (pharmacyId || null)
+          pharmacy_id: pharmacyId,
+          created_at: new Date(),
+          updated_at: new Date()
         },
         select: {
           id: true,
@@ -477,9 +478,11 @@ export class UserController {
           email,
           full_name,
           role,
-          pharmacy_id: role === 'SUPER_ADMIN' ? null : pharmacy_id,
+          pharmacy_id,
           password: hashedPassword,
-          is_active: true
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date()
         }
       });
       
