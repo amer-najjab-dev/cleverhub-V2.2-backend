@@ -15,8 +15,6 @@ router.post('/subscriptions/renew', superadmin_controller_1.superAdminController
 router.post('/subscriptions/extend-courtesy', superadmin_controller_1.superAdminController.extendCourtesy);
 // Comunicación
 router.post('/broadcast', superadmin_controller_1.superAdminController.sendBroadcast);
-// Health check
-router.get('/health-status', superadmin_controller_1.superAdminController.getHealthStatus);
 // Impersonate
 router.post('/impersonate/:pharmacyId', superadmin_controller_1.superAdminController.impersonate);
 exports.default = router;

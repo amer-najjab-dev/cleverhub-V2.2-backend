@@ -34,7 +34,9 @@ export const pharmacyController = {
           address,
           phone,
           email,
-          is_active: true
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date()
         }
       });
       

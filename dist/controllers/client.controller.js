@@ -122,7 +122,7 @@ class ClientController {
         try {
             const id = parseInt(req.params.id);
             // Verificar si el cliente tiene deuda pendiente
-            const activeDebt = await server_1.prisma.client_debt.findFirst({
+            const activeDebt = await server_1.prisma.client_debts.findFirst({
                 where: {
                     client_id: id,
                     pending_amount: { gt: 0 }
@@ -229,7 +229,7 @@ class ClientController {
     async getDebts(req, res) {
         try {
             const { id } = req.params;
-            const debts = await server_1.prisma.client_debt.findMany({
+            const debts = await server_1.prisma.client_debts.findMany({
                 where: { client_id: Number(id) },
                 orderBy: { created_at: 'desc' },
             });
@@ -284,7 +284,7 @@ class ClientController {
                 include: {
                     sale_items: {
                         include: {
-                            product: true
+                            products: true
                         }
                     }
                 },
@@ -488,14 +488,14 @@ class ClientController {
             let remainingAmount = amount;
             let updatedDebts = [];
             // Obtener todas las deudas activas ordenadas por fecha ASC (FIFO)
-            const activeDebts = await server_1.prisma.client_debt.findMany({
+            const activeDebts = await server_1.prisma.client_debts.findMany({
                 where: {
                     client_id: clientId,
                     pending_amount: { gt: 0 }
                 },
                 orderBy: { created_at: 'asc' },
                 include: {
-                    client: true
+                    clients: true
                 }
             });
             if (activeDebts.length === 0) {
@@ -512,7 +512,7 @@ class ClientController {
                 const applyAmount = Math.min(remainingAmount, currentPending);
                 const newPaidAmount = currentPaid + applyAmount;
                 // ACTUALIZAR client_debt
-                await server_1.prisma.client_debt.update({
+                await server_1.prisma.client_debts.update({
                     where: { id: debt.id },
                     data: {
                         paid_amount: newPaidAmount,
@@ -577,7 +577,7 @@ class ClientController {
     async get_pending_amount(req, res) {
         try {
             const clientId = parseInt(req.params.clientId);
-            const activeDebt = await server_1.prisma.client_debt.findFirst({
+            const activeDebt = await server_1.prisma.client_debts.findFirst({
                 where: {
                     client_id: clientId,
                     pending_amount: { gt: 0 }
@@ -601,7 +601,7 @@ class ClientController {
     async getPendingAmount(req, res) {
         try {
             const clientId = parseInt(req.params.clientId);
-            const activeDebt = await server_1.prisma.client_debt.findFirst({
+            const activeDebt = await server_1.prisma.client_debts.findFirst({
                 where: {
                     client_id: clientId,
                     pending_amount: { gt: 0 }

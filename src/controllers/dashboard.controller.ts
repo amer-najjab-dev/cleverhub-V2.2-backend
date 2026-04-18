@@ -106,7 +106,7 @@ export class DashboardController {
           }
         },
         include: {
-          product: {
+          products: {
             select: { name: true }
           }
         },
@@ -120,8 +120,8 @@ export class DashboardController {
         take: 10,
         orderBy: { created_at: 'desc' },
         include: { 
-          client: true,
-          user: {
+          clients: true,
+          users: {
             select: { full_name: true }
           }
         }
@@ -169,7 +169,7 @@ export class DashboardController {
           total_transactions: stats._count,
           low_stock_alerts: lowStock,
           expiring_products: expiringProducts.map(p => ({
-            product_name: p.product.name,
+            products_name: p.products.name,
             batch_number: p.batch_number,
             expiry_date: p.expiry_date,
             quantity: p.quantity
@@ -178,8 +178,8 @@ export class DashboardController {
             id: sale.id,
             sale_number: sale.sale_number,
             total: sale.total,
-            client_name: sale.client ? `${sale.client.first_name} ${sale.client.last_name}` : 'Cliente no registrado',
-            user_name: sale.user?.full_name || 'Usuario',
+            clients_name: sale.clients ? `${sale.clients.first_name} ${sale.clients.last_name}` : 'Cliente no registrado',
+            users_name: sale.users?.full_name || 'Usuario',
             created_at: sale.created_at
           })),
           top_clients: enrichedTopClients,
@@ -256,7 +256,7 @@ export class DashboardController {
 
       const saleItems = await prisma.sale_items.findMany({
         where: {
-          sale: {
+          sales: {
             ...pharmacyFilter,
             created_at: { gte: startDate },
             sale_status: 'completed'
@@ -481,7 +481,7 @@ export class DashboardController {
           const saleItems = await prisma.sale_items.findMany({
             where: {
               product_id: item.product_id,
-              sale: {
+              sales: {
                 ...pharmacyFilter,
                 created_at: { 
                   gte: startDate,

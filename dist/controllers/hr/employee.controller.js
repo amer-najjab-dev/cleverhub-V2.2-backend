@@ -41,7 +41,7 @@ exports.employeeController = {
         try {
             const employees = await server_1.prisma.employees.findMany({
                 include: {
-                    default_shift: true,
+                    shifts: true,
                     shift_assignments: {
                         take: 30,
                         orderBy: { date: 'desc' }
@@ -70,7 +70,7 @@ exports.employeeController = {
             const employee = await server_1.prisma.employees.findUnique({
                 where: { id: parseInt(id) },
                 include: {
-                    default_shift: true,
+                    shifts: true,
                     shift_assignments: {
                         take: 30,
                         orderBy: { date: 'desc' }
@@ -115,7 +115,7 @@ exports.employeeController = {
             const hashedPassword = await bcrypt.hash(password || 'empleado123', 10);
             const user = await server_1.prisma.users.create({
                 data: {
-                    email,
+                    email: email,
                     full_name: full_name,
                     password: hashedPassword,
                     role: 'employee',
@@ -218,7 +218,7 @@ exports.employeeController = {
                 return res.status(403).json({ success: false, message: 'Usuario sin farmacia asignada' });
             }
             const where = {
-                employee: {
+                employees: {
                     pharmacy_id: pharmacyId
                 }
             };
@@ -234,10 +234,10 @@ exports.employeeController = {
             const assignments = await server_1.prisma.shift_assignments.findMany({
                 where,
                 include: {
-                    shift: true,
-                    employee: {
+                    shifts: true,
+                    employees: {
                         include: {
-                            user: {
+                            users: {
                                 select: { full_name: true }
                             }
                         }
@@ -248,10 +248,7 @@ exports.employeeController = {
             // Transformar los datos para mantener la estructura esperada por el frontend
             const assignmentsWithEmployees = assignments.map((a) => ({
                 ...a,
-                employee: {
-                    ...a.employee,
-                    user: a.employee.user
-                }
+                employee: a.employees || null
             }));
             res.json({ success: true, data: assignmentsWithEmployees });
         }

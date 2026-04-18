@@ -22,7 +22,7 @@ export const inventoryController = {
       const inventory = await prisma.inventory_lots.findMany({
         where: pharmacyFilter,
         include: {
-          product: true
+          products: true
         },
         orderBy: { expiry_date: 'asc' },
         skip: skip,
@@ -58,7 +58,7 @@ export const inventoryController = {
       const lots = await prisma.inventory_lots.findMany({
         where,
         include: {
-          product: true,
+          products: true,
           stock_movements: {
             take: 5,
             orderBy: { created_at: 'desc' }
@@ -124,14 +124,14 @@ export const inventoryController = {
       const inventoryValue = await prisma.inventory_lots.findMany({
         where: pharmacyFilter,
         include: {
-          product: {
+          products: {
             select: { pricePPH: true }
           }
         }
       });
       
       const totalValue = inventoryValue.reduce((sum, lot) => {
-        const price = Number(lot.product?.pricePPH ?? 0);
+        const price = Number(lot.products?.pricePPH ?? 0);
         return sum + (lot.quantity * price);
       }, 0);
       
@@ -288,7 +288,7 @@ export const inventoryController = {
           ...pharmacyFilter,
           quantity: { lt: 10 }
         },
-        include: { product: true }
+        include: { products: true }
       });
       
       const expiring = await prisma.inventory_lots.findMany({
@@ -296,7 +296,7 @@ export const inventoryController = {
           ...pharmacyFilter,
           expiry_date: { lte: thirtyDaysFromNow }
         },
-        include: { product: true }
+        include: { products: true }
       });
       
       res.json({

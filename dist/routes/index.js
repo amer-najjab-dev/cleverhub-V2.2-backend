@@ -44,8 +44,6 @@ const superadmin_controller_2 = require("../controllers/superadmin.controller");
 const pharmacy_controller_1 = require("../controllers/pharmacy.controller");
 const user_controller_1 = require("../controllers/user.controller");
 const dashboard_controller_1 = require("../controllers/dashboard.controller");
-const supplier_controller_1 = require("../controllers/supplier.controller");
-const stock_controller_1 = require("../controllers/stock.controller");
 // Importaciones de rutas existentes
 const auth_routes_1 = __importDefault(require("./auth.routes"));
 const user_routes_1 = __importDefault(require("./user.routes"));
@@ -104,18 +102,9 @@ router.get('/admin/cron/check-expirations', async (req, res) => {
     }
 });
 // ==========================================
-// RUTAS CON PREFIJO /api (para compatibilidad con frontend)
+// RUTAS SUPER_ADMIN (PRIMERO - más específicas)
 // ==========================================
-// Dashboard endpoints - ADMIN y EMPLOYEE
-router.get('/api/dashboard/kpis', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getKPIs);
-router.get('/api/dashboard/hourly-sales', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getHourlySales);
-router.get('/api/dashboard/comparative', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getComparativeData);
-router.get('/api/dashboard/top-products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getTopProducts);
-// Delivery routes - SOLO ADMIN
-router.use('/api', (0, rbac_1.requireRole)(['ADMIN']), delivery_routes_1.default);
-// ==========================================
-// RUTAS SUPER_ADMIN CON PREFIJO /api
-// ==========================================
+console.log('  📌 Cargando rutas SUPER_ADMIN...');
 // Farmacias
 router.get('/api/admin/pharmacies', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.getAll);
 router.post('/api/admin/pharmacies', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.create);
@@ -134,9 +123,10 @@ router.post('/api/admin/subscriptions/extend-courtesy', (0, rbac_1.requireRole)(
 router.post('/api/admin/subscriptions/renew', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.renewLicense);
 // Health status
 router.get('/api/admin/health-status', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.getHealthStatus);
+router.get('/api/super-admin/health', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.getHealthStatus);
 // Broadcast
 router.post('/api/admin/broadcast', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.sendBroadcast);
-// Stats (si se usa)
+// Stats
 router.get('/api/admin/stats', (0, rbac_1.requireRole)(['SUPER_ADMIN']), dashboard_controller_1.dashboardController.getStockStats);
 // Logs de auditoría
 router.get('/api/admin/logs', (0, rbac_1.requireRole)(['SUPER_ADMIN']), async (req, res) => {
@@ -144,7 +134,7 @@ router.get('/api/admin/logs', (0, rbac_1.requireRole)(['SUPER_ADMIN']), async (r
         const { prisma } = await Promise.resolve().then(() => __importStar(require('../server')));
         const logs = await prisma.adminLog.findMany({
             include: {
-                admin: {
+                users: {
                     select: { id: true, email: true, full_name: true }
                 }
             },
@@ -158,127 +148,99 @@ router.get('/api/admin/logs', (0, rbac_1.requireRole)(['SUPER_ADMIN']), async (r
     }
 });
 // ==========================================
-// RUTAS API CON PREFIJO /api - USAR RUTAS EXISTENTES
+// RUTAS SUPER_ADMIN sin prefijo
 // ==========================================
-// Ventas - ADMIN y EMPLOYEE
-router.use('/api/sales', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), sale_routes_1.default);
-// Clientes - ADMIN y EMPLOYEE
-router.use('/api/clients', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), client_routes_1.default);
-// Productos - ADMIN y EMPLOYEE
-router.use('/api/products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), product_routes_1.default);
-// Stock - Solo ADMIN
+router.get('/admin/health-status', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.getHealthStatus);
+router.use('/admin', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_routes_1.default);
+// ==========================================
+// RUTAS DASHBOARD - SOLO ADMIN (EMPLOYEE y AUXILIAR NO)
+// ==========================================
+console.log('  📌 Cargando rutas DASHBOARD...');
+// Dashboard sin prefijo - SOLO ADMIN
+router.get('/dashboard', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getDashboard);
+router.get('/dashboard/kpis', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getKPIs);
+router.get('/dashboard/hourly-sales', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getHourlySales);
+router.get('/dashboard/comparative', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getComparativeData);
+router.get('/dashboard/top-products', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getTopProducts);
+router.get('/dashboard/average-ticket', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getAverageTicket);
+router.get('/dashboard/low-stock', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getLowStockCount);
+router.get('/dashboard/quick-summary', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getQuickSummary);
+router.get('/dashboard/stock-stats', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getStockStats);
+// Dashboard con prefijo /api - SOLO ADMIN
+router.get('/api/dashboard/kpis', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getKPIs);
+router.get('/api/dashboard/hourly-sales', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getHourlySales);
+router.get('/api/dashboard/comparative', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getComparativeData);
+router.get('/api/dashboard/top-products', (0, rbac_1.requireRole)(['ADMIN']), dashboard_controller_1.dashboardController.getTopProducts);
+// ==========================================
+// RUTAS ADMIN (exclusivas)
+// ==========================================
+console.log('  📌 Cargando rutas ADMIN...');
+// Delivery routes
+router.use('/api/delivery', (0, rbac_1.requireRole)(['ADMIN']), delivery_routes_1.default);
+// Stock
 router.use('/api/stock', (0, rbac_1.requireRole)(['ADMIN']), stock_routes_1.default);
-// Inventario - Solo ADMIN
+router.use('/stock', (0, rbac_1.requireRole)(['ADMIN']), stock_routes_1.default);
+// Inventario
 router.use('/api/inventory', (0, rbac_1.requireRole)(['ADMIN']), inventory_routes_1.default);
-// Proveedores - Solo ADMIN
-router.use('/api/suppliers', (0, rbac_1.requireRole)(['ADMIN']), supplier_routes_1.default);
-// RRHH - Solo ADMIN
+router.use('/inventory', (0, rbac_1.requireRole)(['ADMIN']), inventory_routes_1.default);
+// RRHH
 router.use('/api/hr', (0, rbac_1.requireRole)(['ADMIN']), hr_routes_1.default);
-// Reportes - ADMIN y SUPER_ADMIN
-router.use('/api/reports', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), report_routes_1.default);
-// Configuración - Solo ADMIN
+router.use('/hr', (0, rbac_1.requireRole)(['ADMIN']), hr_routes_1.default);
+// Loyalty (solo ADMIN)
 router.use('/api/loyalty', (0, rbac_1.requireRole)(['ADMIN']), loyalty_routes_1.default);
 router.use('/api/loyalty-rewards', (0, rbac_1.requireRole)(['ADMIN']), loyaltyReward_routes_1.default);
-router.use('/api/loyalty-checkout', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), loyaltyCheckout_routes_1.default);
 router.use('/api/loyalty-config', (0, rbac_1.requireRole)(['ADMIN']), loyaltyConfig_routes_1.default);
+router.use('/loyalty', (0, rbac_1.requireRole)(['ADMIN']), loyalty_routes_1.default);
+router.use('/loyalty-rewards', (0, rbac_1.requireRole)(['ADMIN']), loyaltyReward_routes_1.default);
+router.use('/loyalty-config', (0, rbac_1.requireRole)(['ADMIN']), loyaltyConfig_routes_1.default);
+// Loyalty-checkout (ADMIN y EMPLOYEE)
+router.use('/api/loyalty-checkout', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), loyaltyCheckout_routes_1.default);
+router.use('/loyalty-checkout', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), loyaltyCheckout_routes_1.default);
+// Settings
 router.use('/api/settings', (0, rbac_1.requireRole)(['ADMIN']), settings_routes_1.default);
-// Campañas - ADMIN y EMPLOYEE
+router.use('/settings', (0, rbac_1.requireRole)(['ADMIN']), settings_routes_1.default);
+// Reportes
+router.use('/api/reports', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), report_routes_1.default);
+router.use('/reports', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), report_routes_1.default);
+// Usuarios
+router.use('/api/users', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), user_routes_1.default);
+router.use('/users', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), user_routes_1.default);
+// Campañas
 router.use('/api/campaigns', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), campaign_routes_1.default);
-// IA - ADMIN y EMPLOYEE
+router.use('/campaigns', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), campaign_routes_1.default);
+// IA
 router.use('/api/ai/products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), productIntelligence_routes_1.default);
 router.use('/api/ai/clients', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), clientIntelligence_routes_1.default);
 router.use('/api/ai/loyalty', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), loyalty_routes_1.default);
-// Usuarios - ADMIN y SUPER_ADMIN
-router.use('/api/users', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), user_routes_1.default);
-// ==========================================
-// RUTAS SUPER_ADMIN (Protegidas) - sin prefijo
-// ==========================================
-console.log('  📌 Cargando rutas SUPER_ADMIN...');
-// Rutas específicas de SUPER_ADMIN - DEBEN IR ANTES del comodín
-router.get('/admin/pharmacies', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.getAll);
-router.post('/admin/pharmacies', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.create);
-router.put('/admin/pharmacies/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.update);
-router.delete('/admin/pharmacies/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), pharmacy_controller_1.pharmacyController.delete);
-router.get('/admin/users', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.getAllUsers);
-router.get('/admin/users/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.getUserById);
-router.post('/admin/users', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.createUser);
-router.put('/admin/users/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.updateUser);
-router.delete('/admin/users/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.deleteUser);
-router.get('/admin/stats', (0, rbac_1.requireRole)(['SUPER_ADMIN']), dashboard_controller_1.dashboardController.getStockStats);
-// Health status - DEBE IR ANTES del comodín
-router.get('/admin/health-status', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.getHealthStatus);
-// Logs - DEBE IR ANTES del comodín
-router.get('/admin/logs', (0, rbac_1.requireRole)(['SUPER_ADMIN']), async (req, res) => {
-    try {
-        const { prisma } = await Promise.resolve().then(() => __importStar(require('../server')));
-        const logs = await prisma.adminLog.findMany({
-            include: {
-                admin: {
-                    select: { id: true, email: true, full_name: true }
-                }
-            },
-            orderBy: { created_at: 'desc' },
-            take: 100
-        });
-        res.json({ success: true, data: logs });
-    }
-    catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-// ¡ESTA LÍNEA DEBE IR AL FINAL! - Todas las rutas de superadmin (suscripciones, broadcast, impersonate)
-router.use('/admin', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_routes_1.default);
-// ==========================================
-// RUTAS DASHBOARD - ADMIN y EMPLOYEE (sin prefijo)
-// ==========================================
-console.log('  📌 Cargando rutas DASHBOARD...');
-router.get('/dashboard', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getDashboard);
-router.get('/dashboard/kpis', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getKPIs);
-router.get('/dashboard/hourly-sales', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getHourlySales);
-router.get('/dashboard/comparative', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getComparativeData);
-router.get('/dashboard/top-products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getTopProducts);
-router.get('/dashboard/average-ticket', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getAverageTicket);
-router.get('/dashboard/low-stock', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getLowStockCount);
-router.get('/dashboard/quick-summary', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getQuickSummary);
-router.get('/dashboard/stock-stats', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), dashboard_controller_1.dashboardController.getStockStats);
-// ==========================================
-// RUTAS SIN PREFIJO API (Compatibilidad)
-// ==========================================
-console.log('  📌 Cargando rutas sin prefijo (compatibilidad)...');
-// Ventas - ADMIN y EMPLOYEE
-router.use('/sales', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), sale_routes_1.default);
-// Clientes - ADMIN y EMPLOYEE
-router.use('/clients', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), client_routes_1.default);
-// Productos - ADMIN y EMPLOYEE
-router.use('/products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), product_routes_1.default);
-// Proveedores - SOLO ADMIN
-router.get('/suppliers', (0, rbac_1.requireRole)(['ADMIN']), supplier_controller_1.supplierController.getAll);
-router.get('/suppliers/:id', (0, rbac_1.requireRole)(['ADMIN']), supplier_controller_1.supplierController.getById);
-router.post('/suppliers', (0, rbac_1.requireRole)(['ADMIN']), supplier_controller_1.supplierController.create);
-router.put('/suppliers/:id', (0, rbac_1.requireRole)(['ADMIN']), supplier_controller_1.supplierController.update);
-router.delete('/suppliers/:id', (0, rbac_1.requireRole)(['ADMIN']), supplier_controller_1.supplierController.delete);
-// Stock - Solo ADMIN
-router.use('/stock', (0, rbac_1.requireRole)(['ADMIN']), stock_routes_1.default);
-router.use('/inventory', (0, rbac_1.requireRole)(['ADMIN']), inventory_routes_1.default);
-router.get('/api/stock/summary', (0, rbac_1.requireRole)(['ADMIN']), stock_controller_1.stockController.getSummary);
-// RRHH - Solo ADMIN
-router.use('/hr', (0, rbac_1.requireRole)(['ADMIN']), hr_routes_1.default);
-// Reportes - ADMIN y SUPER_ADMIN
-router.use('/reports', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), report_routes_1.default);
-// Configuración - Solo SUPER_ADMIN
-router.use('/settings', (0, rbac_1.requireRole)(['SUPER_ADMIN']), settings_routes_1.default);
-// Lealtad - ADMIN
-router.use('/loyalty', (0, rbac_1.requireRole)(['ADMIN']), loyalty_routes_1.default);
-router.use('/loyalty-rewards', (0, rbac_1.requireRole)(['ADMIN']), loyaltyReward_routes_1.default);
-router.use('/loyalty-checkout', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), loyaltyCheckout_routes_1.default);
-router.use('/loyalty-config', (0, rbac_1.requireRole)(['ADMIN']), loyaltyConfig_routes_1.default);
-// Campañas - ADMIN y EMPLOYEE
-router.use('/campaigns', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), campaign_routes_1.default);
-// IA - ADMIN y EMPLOYEE
 router.use('/ai/products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), productIntelligence_routes_1.default);
 router.use('/ai/clients', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), clientIntelligence_routes_1.default);
 router.use('/ai/loyalty', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), loyalty_routes_1.default);
-// Usuarios - ADMIN y SUPER_ADMIN
-router.use('/users', (0, rbac_1.requireRole)(['ADMIN', 'SUPER_ADMIN']), user_routes_1.default);
+// ==========================================
+// RUTAS EMPLOYEE (con sus permisos)
+// ==========================================
+console.log('  📌 Cargando rutas EMPLOYEE...');
+// Ventas - EMPLOYEE
+router.use('/api/sales', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), sale_routes_1.default);
+router.use('/sales', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), sale_routes_1.default);
+// Clientes - EMPLOYEE
+router.use('/api/clients', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), client_routes_1.default);
+router.use('/clients', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), client_routes_1.default);
+// Productos - EMPLOYEE
+router.use('/api/products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), product_routes_1.default);
+router.use('/products', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE', 'AUXILIAR']), product_routes_1.default);
+// Proveedores - EMPLOYEE (SÍ tiene acceso)
+router.use('/api/suppliers', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), supplier_routes_1.default);
+router.use('/suppliers', (0, rbac_1.requireRole)(['ADMIN', 'EMPLOYEE']), supplier_routes_1.default);
+// ==========================================
+// RUTAS AUXILIAR (solo ventas y productos)
+// ==========================================
+console.log('  📌 Cargando rutas AUXILIAR...');
+// Ventas - AUXILIAR
+router.use('/api/sales', (0, rbac_1.requireRole)(['AUXILIAR']), sale_routes_1.default);
+router.use('/sales', (0, rbac_1.requireRole)(['AUXILIAR']), sale_routes_1.default);
+// Productos - AUXILIAR
+router.use('/api/products', (0, rbac_1.requireRole)(['AUXILIAR']), product_routes_1.default);
+router.use('/products', (0, rbac_1.requireRole)(['AUXILIAR']), product_routes_1.default);
+// NOTA: AUXILIAR NO tiene acceso a clientes, proveedores, dashboard
 console.log('✅ Todas las rutas cargadas correctamente con RBAC');
 exports.default = router;

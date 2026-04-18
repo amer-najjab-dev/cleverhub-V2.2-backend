@@ -34,13 +34,9 @@ export class AuthController {
           password: hashedPassword,
           full_name: fullName,
           role,
-          is_active: true
-        },
-        select: {
-          id: true,
-          email: true,
-          full_name: true,
-          role: true
+          is_active: true,
+          created_at: new Date(),
+          updated_at: new Date()
         }
       });
 

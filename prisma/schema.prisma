@@ -7,80 +7,153 @@ datasource db {
   provider = "postgresql"
 }
 
-model pharmacy {
-  id                Int                  @id @default(autoincrement())
-  name              String               @unique
-  license           String               @unique
-  address           String?
-  phone             String?
-  email             String?
-  is_active         Boolean              @default(true)
-  created_at        DateTime             @default(now())
-  updated_at        DateTime             @updatedAt
-  subscription_id   Int?                 @unique
-  notifications     SystemNotification[]
-  clients           clients[]
-  employees         employees[]
-  holidays          holidays[]
-  inventory_lots    inventory_lots[]
-  loyalty_config    loyalty_config?
-  message_campaigns message_campaigns[]
-  message_templates message_templates[]
-  subscription      Subscription?        @relation(fields: [subscription_id], references: [id])
-  sales             sales[]
-  shifts            shifts[]
-  stock_movements   stock_movements[]
-  suppliers         suppliers[]
-  users             users[]
+model AdminLog {
+  id          Int             @id @default(autoincrement())
+  admin_id    Int
+  action      AdminActionType
+  target_type String
+  target_id   Int
+  details     Json?
+  ip_address  String?
+  user_agent  String?
+  created_at  DateTime        @default(now())
+  users       users           @relation(fields: [admin_id], references: [id])
+
+  @@index([action])
+  @@index([admin_id])
+  @@index([created_at])
 }
 
-model users {
-  id                    Int                     @id @default(autoincrement())
-  email                 String                  @unique
-  full_name             String?
-  role                  String                  @default("EMPLOYEE")
-  is_active             Boolean                 @default(true)
-  password              String?
-  created_at            DateTime                @default(now())
-  updated_at            DateTime                @updatedAt
-  pharmacy_id           Int?
-  admin_logs            AdminLog[]
-  created_notifications SystemNotification[]    @relation("creator")
-  ai_messages           ai_generated_messages[]
-  employees             employees?
-  message_campaigns     message_campaigns[]
-  message_templates     message_templates[]
-  sales                 sales[]
-  stock_movements       stock_movements[]
-  pharmacy              pharmacy?               @relation(fields: [pharmacy_id], references: [id])
-  received_deliveries  delivery_note[] @relation("received_deliveries")
+model PaymentLog {
+  id              Int           @id @default(autoincrement())
+  subscription_id Int
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("MAD")
+  payment_method  String
+  status          PaymentStatus @default(PENDING)
+  transaction_id  String?       @unique
+  invoice_url     String?
+  error_message   String?
+  paid_at         DateTime?
+  created_at      DateTime      @default(now())
+  Subscription    Subscription  @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
 
-  @@map("users")
+  @@index([created_at])
+  @@index([status])
+}
+
+model Subscription {
+  id                 Int                  @id @default(autoincrement())
+  pharmacy_id        Int                  @unique
+  plan               SubscriptionPlan     @default(BASIC)
+  status             SubscriptionStatus   @default(TRIAL)
+  start_date         DateTime             @default(now())
+  end_date           DateTime
+  next_billing_date  DateTime?
+  trial_end_date     DateTime?
+  created_at         DateTime             @default(now())
+  updated_at         DateTime
+  PaymentLog         PaymentLog[]
+  SystemNotification SystemNotification[]
+  pharmacy           pharmacy?
+
+  @@index([end_date])
+  @@index([status])
+}
+
+model SystemNotification {
+  id              Int                @id @default(autoincrement())
+  target          NotificationTarget @default(ALL)
+  pharmacy_id     Int?
+  title           String
+  message         String
+  action_url      String?
+  is_read         Boolean            @default(false)
+  read_by         Json?
+  sent_at         DateTime           @default(now())
+  expires_at      DateTime?
+  created_by      Int
+  subscription_id Int?
+  users           users              @relation(fields: [created_by], references: [id])
+  pharmacy        pharmacy?          @relation(fields: [pharmacy_id], references: [id])
+  Subscription    Subscription?      @relation(fields: [subscription_id], references: [id])
+
+  @@index([is_read])
+  @@index([pharmacy_id])
+  @@index([sent_at])
+  @@index([target])
+}
+
+model ai_generated_messages {
+  id          Int       @id @default(autoincrement())
+  tone        String    @db.VarChar(20)
+  message     String
+  product_id  Int?
+  points_cost Int?
+  usage_count Int?      @default(0)
+  like_count  Int?      @default(0)
+  created_by  Int?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  users       users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  products    products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([product_id], map: "idx_ai_messages_product")
+}
+
+model client_consent {
+  id                 Int       @id @default(autoincrement())
+  client_id          Int?      @unique
+  whatsapp           Boolean?  @default(true)
+  email              Boolean?  @default(true)
+  sms                Boolean?  @default(true)
+  unsubscribed_at    DateTime? @db.Timestamp(6)
+  unsubscribe_reason String?
+  unsubscribe_token  String?   @unique @db.VarChar(100)
+  created_at         DateTime? @default(now()) @db.Timestamp(6)
+  clients            clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([client_id], map: "idx_client_consent_client")
+}
+
+model client_debts {
+  id                Int       @id @default(autoincrement())
+  client_id         Int
+  total_debt        Decimal   @default(0) @db.Decimal(10, 2)
+  paid_amount       Decimal   @default(0) @db.Decimal(10, 2)
+  last_payment_date DateTime? @db.Timestamp(6)
+  status            String?   @default("pending") @db.VarChar(20)
+  notes             String?
+  created_at        DateTime? @default(now()) @db.Timestamp(6)
+  updated_at        DateTime? @default(now()) @db.Timestamp(6)
+  pending_amount    Decimal?  @default(dbgenerated("(total_debt - paid_amount)")) @db.Decimal(10, 2)
+  clients           clients   @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([client_id], map: "idx_client_debts_client_id")
 }
 
 model clients {
   id                   Int                    @id @default(autoincrement())
-  first_name           String                 @map("first_name") @db.VarChar(100)
-  last_name            String                 @map("last_name") @db.VarChar(100)
-  email                String?                @map("email") @db.VarChar(255)
-  phone                String?                @map("phone") @db.VarChar(20)
-  dni                  String?                @unique @map("dni") @db.VarChar(20)
-  address              String?                @map("address")
-  birth_date           DateTime?              @map("birth_date") @db.Date
-  allergies            String?                @map("allergies")
-  chronic_conditions   String?                @map("chronic_conditions")
-  is_pregnant          Boolean?               @default(false) @map("is_pregnant")
-  is_lactating         Boolean?               @default(false) @map("is_lactating")
-  loyalty_points       Int?                   @default(0) @map("loyalty_points")
-  total_purchases      Decimal?               @default(0) @map("total_purchases") @db.Decimal(10, 2)
-  last_purchase_date   DateTime?              @db.Timestamp(6)
-  favorite             Boolean?               @default(false) @map("favorite")
-  notes                String?                @map("notes")
-  created_at           DateTime?              @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at           DateTime?              @default(now()) @map("updated_at") @db.Timestamp(6)
   pharmacy_id          Int
-  consent              client_consent?
-  client_debts         client_debt[]
+  first_name           String                 @db.VarChar(100)
+  last_name            String                 @db.VarChar(100)
+  email                String?                @db.VarChar(255)
+  phone                String?                @db.VarChar(20)
+  dni                  String?                @unique @db.VarChar(20)
+  address              String?
+  birth_date           DateTime?              @db.Date
+  allergies            String?
+  chronic_conditions   String?
+  is_pregnant          Boolean?               @default(false)
+  is_lactating         Boolean?               @default(false)
+  loyalty_points       Int?                   @default(0)
+  total_purchases      Decimal?               @default(0) @db.Decimal(10, 2)
+  last_purchase_date   DateTime?              @db.Timestamp(6)
+  favorite             Boolean?               @default(false)
+  notes                String?
+  created_at           DateTime?              @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?              @default(now()) @db.Timestamp(6)
+  client_consent       client_consent?
+  client_debts         client_debts[]
   pharmacy             pharmacy               @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
   health_records       health_records[]
   loyalty_transactions loyalty_transactions[]
@@ -88,468 +161,10 @@ model clients {
   sales                sales[]
 
   @@index([pharmacy_id])
-  @@map("clients")
-}
-
-model products {
-  id                     Int                     @id @default(autoincrement())
-  name                   String                  @map("name") @db.VarChar(255)
-  description            String?                 @map("description")
-  pricePPV               Decimal                 @db.Decimal(10, 2)
-  pricePPH               Decimal                 @db.Decimal(10, 2)
-  stock                  Int                     @default(0) @map("stock")
-  category               String?                 @map("category") @db.VarChar(100)
-  sku                    String?                 @unique @map("sku") @db.VarChar(50)
-  imageUrl               String?
-  expirationDate         DateTime?               @db.Date
-  createdAt              DateTime?               @default(now()) @db.Timestamp(6)
-  updatedAt              DateTime?               @default(now()) @db.Timestamp(6)
-  dosageForm             String?                 @db.VarChar(50)
-  barcode                String?                 @unique(map: "products_barcode_unique", where: raw("(barcode IS NOT NULL)")) @map("barcode") @db.VarChar(100)
-  zone                   String?                 @map("zone") @db.VarChar(50)
-  active                 Boolean?                @default(true) @map("active")
-  laboratory             String?                 @map("laboratory") @db.VarChar(100)
-  prescription           Boolean?                @default(false) @map("prescription")
-  posologyadult          String?
-  posologychild          String?
-  contraindications      String?                 @map("contraindications")
-  monograph              String?                 @map("monograph")
-  code_atc               String?                 @map("code_atc") @db.VarChar(20)
-  composition            String?                 @map("composition")
-  dosage                 String?                 @map("dosage") @db.VarChar(100)
-  presentation           String?                 @map("presentation") @db.VarChar(255)
-  princeps               Boolean?                @default(false) @map("princeps")
-  statut                 String?                 @map("statut") @db.VarChar(50)
-  tableau                String?                 @map("tableau") @db.VarChar(50)
-  indications            String?                 @map("indications")
-  substance_psychoactive Boolean?                @default(false) @map("substance_psychoactive")
-  nature_produit         String?                 @map("nature_produit") @db.VarChar(100)
-  classe_therapeutique   String?                 @map("classe_therapeutique") @db.VarChar(100)
-  distributeur           String?                 @map("distributeur") @db.VarChar(255)
-  mise_a_jour_le         DateTime?               @map("mise_a_jour_le") @db.Date
-  ajoute_le              DateTime?               @map("ajoute_le") @db.Date
-  derniere_mise_a_jour   DateTime?               @map("derniere_mise_a_jour") @db.Timestamp(6)
-  url_source             String?                 @map("url_source")
-  titulo_completo        String?                 @map("titulo_completo")
-  nombre_original        String?                 @map("nombre_original") @db.VarChar(255)
-  ai_messages            ai_generated_messages[]
-  inventory_lots         inventory_lots[]
-  pack_products          loyalty_pack_products[]
-  loyalty_rewards        loyalty_reward[]
-  price_history          price_history[]
-  product_purchases      product_purchases[]
-  sale_items             sale_items[]
-  stock_movements        stock_movements[]
-  delivery_note_items  delivery_note_items[]
-
-  @@map("products")
-}
-
-model suppliers {
-  id                  String               @id @default(cuid()) @db.VarChar(255)
-  company_name        String               @db.VarChar(255)
-  email               String?              @map("email") @db.VarChar(255)
-  website             String?              @db.VarChar(255)
-  fax                 String?              @db.VarChar(50)
-  payment_terms       String?              @map("payment_terms") @db.VarChar(100)
-  tax_id              String?              @map("tax_id") @db.VarChar(50)
-  registration_number String?              @db.VarChar(50)
-  balance             Decimal?             @default(0) @db.Decimal(10, 2)
-  is_active           Boolean?             @default(true) @map("is_active")
-  notes               String?              @map("notes")
-  created_at          DateTime?            @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at          DateTime?            @default(now()) @map("updated_at") @db.Timestamp(6)
-  pharmacy_id         Int
-  credit_notes        credit_notes[]
-  product_purchases   product_purchases[]
-  supplier_addresses  supplier_addresses[]
-  supplier_phones     supplier_phones[]
-  pharmacy            pharmacy             @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
-  elivery_notes       delivery_note[]
-  payment_obligations  payment_obligation[]
-
-  @@index([pharmacy_id])
-  @@map("suppliers")
-}
-
-model session {
-  sid    String   @id @db.VarChar
-  sess   Json     @db.Json
-  expire DateTime @db.Timestamp(6)
-
-  @@index([expire], map: "IDX_session_expire")
-  @@map("session")
-}
-
-model sales {
-  id                     Int                    @id @default(autoincrement())
-  sale_number            String                 @unique @map("sale_number") @db.VarChar(50)
-  client_id              Int?                   @map("client_id")
-  user_id                Int                    @map("user_id")
-  subtotal               Decimal                @map("subtotal") @db.Decimal(10, 2)
-  discount_amount        Decimal?               @default(0) @map("discount_amount") @db.Decimal(10, 2)
-  discount_type          String?                @map("discount_type") @db.VarChar(20)
-  discount_percentage    Decimal?               @map("discount_percentage") @db.Decimal(5, 2)
-  tax_amount             Decimal?               @default(0) @map("tax_amount") @db.Decimal(10, 2)
-  total                  Decimal                @map("total") @db.Decimal(10, 2)
-  paid_amount            Decimal?               @default(0) @map("paid_amount") @db.Decimal(10, 2)
-  change_amount          Decimal?               @default(0) @map("change_amount") @db.Decimal(10, 2)
-  payment_method         String?                @map("payment_method") @db.VarChar(30)
-  payment_status         String?                @default("pending") @map("payment_status") @db.VarChar(20)
-  sale_status            String?                @default("completed") @map("sale_status") @db.VarChar(20)
-  notes                  String?                @map("notes")
-  adult_flag             Boolean?               @map("adult_flag")
-  pregnant_flag          Boolean?               @map("pregnant_flag")
-  lactating_flag         Boolean?               @map("lactating_flag")
-  chronic_condition_flag Boolean?               @map("chronic_condition_flag")
-  usual_medication_flag  Boolean?               @map("usual_medication_flag")
-  amount_applied         Decimal?               @default(0) @db.Decimal(10, 2)
-  amount_pending         Decimal?               @default(0) @db.Decimal(10, 2)
-  is_debt_paid           Boolean?               @default(false)
-  created_at             DateTime?              @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at             DateTime?              @default(now()) @map("updated_at") @db.Timestamp(6)
-  pharmacy_id            Int
-  loyalty_transactions   loyalty_transactions[]
-  message_recipients     message_recipients[]
-  payments               payments[]
-  sale_items             sale_items[]
-  client                 clients?               @relation(fields: [client_id], references: [id], onUpdate: NoAction)
-  pharmacy               pharmacy               @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
-  user                   users                  @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-
-  @@index([pharmacy_id])
-  @@index([client_id])
-  @@index([payment_status])
-  @@map("sales")
-}
-
-model sale_items {
-  id                  Int       @id @default(autoincrement())
-  sale_id             Int       @map("sale_id")
-  product_id          Int       @map("product_id")
-  quantity            Int
-  unit_price_ppv      Decimal   @map("unit_price_ppv") @db.Decimal(10, 2)
-  unit_price_pph      Decimal   @map("unit_price_pph") @db.Decimal(10, 2)
-  discount_amount     Decimal?  @default(0) @map("discount_amount") @db.Decimal(10, 2)
-  discount_percentage Decimal?  @map("discount_percentage") @db.Decimal(5, 2)
-  lot_id              Int?      @map("lot_id")
-  expiration_date     DateTime? @map("expiration_date") @db.Date
-  notes               String?   @map("notes")
-  created_at          DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  subtotal            Decimal   @default(0) @map("subtotal") @db.Decimal(10, 2)
-  total               Decimal   @default(0) @map("total") @db.Decimal(10, 2)
-  margin              Decimal   @default(0) @map("margin") @db.Decimal(10, 2)
-  margin_percentage   Decimal   @default(0) @map("margin_percentage") @db.Decimal(5, 2)
-  product             products  @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sale                sales     @relation(fields: [sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@map("sale_items")
-}
-
-model payments {
-  id             Int       @id @default(autoincrement())
-  sale_id        Int       @map("sale_id")
-  amount         Decimal   @map("amount") @db.Decimal(10, 2)
-  payment_method String    @map("payment_method") @db.VarChar(30)
-  reference      String?   @map("reference") @db.VarChar(100)
-  status         String?   @default("completed") @map("status") @db.VarChar(20)
-  notes          String?   @map("notes")
-  created_at     DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  sale           sales     @relation(fields: [sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([sale_id], map: "idx_payments_sale_id")
-  @@map("payments")
-}
-
-model client_debt {
-  id                Int       @id @default(autoincrement())
-  client_id         Int       @map("client_id")
-  total_debt        Decimal   @default(0) @map("total_debt") @db.Decimal(10, 2)
-  paid_amount       Decimal   @default(0) @map("paid_amount") @db.Decimal(10, 2)
-  pending_amount    Decimal?  @default(dbgenerated()) @map("pending_amount") @db.Decimal(10, 2)
-  last_payment_date DateTime? @map("last_payment_date") @db.Timestamp(6)
-  status            String?   @default("pending") @map("status") @db.VarChar(20)
-  notes             String?   @map("notes")
-  created_at        DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at        DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
-  client            clients   @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([client_id], map: "idx_client_debts_client_id")
-  @@map("client_debts")
-}
-
-model health_records {
-  id                       Int       @id @default(autoincrement())
-  client_id                Int       @map("client_id")
-  glucose_level            Decimal?  @map("glucose_level") @db.Decimal(5, 2)
-  blood_pressure_systolic  Int?      @map("blood_pressure_systolic")
-  blood_pressure_diastolic Int?      @map("blood_pressure_diastolic")
-  weight                   Decimal?  @map("weight") @db.Decimal(5, 2)
-  heart_rate               Int?      @map("heart_rate")
-  record_date              DateTime  @map("record_date") @db.Date
-  notes                    String?   @map("notes")
-  glucose_status           String?   @map("glucose_status") @db.VarChar(20)
-  blood_pressure_status    String?   @map("blood_pressure_status") @db.VarChar(20)
-  heart_rate_status        String?   @map("heart_rate_status") @db.VarChar(20)
-  created_at               DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at               DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
-  client                   clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
-
-  @@index([client_id], map: "idx_health_records_client")
-  @@index([record_date], map: "idx_health_records_date")
-  @@map("health_records")
-}
-
-model inventory_lots {
-  id              Int               @id @default(autoincrement())
-  product_id      Int               @map("product_id")
-  batch_number    String            @map("batch_number") @db.VarChar(100)
-  expiry_date     DateTime          @db.Date
-  quantity        Int
-  created_at      DateTime?         @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at      DateTime?         @default(now()) @map("updated_at") @db.Timestamp(6)
-  pharmacy_id     Int
-  pharmacy        pharmacy          @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
-  product         products          @relation(fields: [product_id], references: [id], onUpdate: NoAction)
-  stock_movements stock_movements[]
-  delivery_note_items  delivery_note_items[]
-
-
-  @@unique([product_id, pharmacy_id, batch_number])
-  @@index([pharmacy_id])
-  @@index([expiry_date])
-  @@map("inventory_lots")
-}
-
-model stock_movements {
-  id          Int             @id @default(autoincrement())
-  product_id  Int             @map("product_id")
-  lot_id      Int?            @map("lot_id")
-  type        String          @db.VarChar(20)
-  quantity    Int
-  stock_after Int
-  notes       String?         @map("notes")
-  created_at  DateTime?       @default(now()) @map("created_at") @db.Timestamp(6)
-  pharmacy_id Int
-  user_id     Int?
-  lot         inventory_lots? @relation(fields: [lot_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  pharmacy    pharmacy        @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
-  product     products        @relation(fields: [product_id], references: [id], onUpdate: NoAction)
-  user        users?          @relation(fields: [user_id], references: [id])
-
-  @@index([pharmacy_id])
-  @@index([product_id])
-  @@map("stock_movements")
-}
-
-model price_history {
-  id         Int      @id @default(autoincrement())
-  product_id Int      @map("product_id")
-  date       DateTime @default(now()) @map("date") @db.Timestamp(6)
-  priceppv   Decimal  @db.Decimal(10, 2)
-  pricepph   Decimal  @db.Decimal(10, 2)
-  product    products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@map("price_history")
-}
-
-model message_templates {
-  id          Int                 @id @default(autoincrement())
-  name        String              @map("name") @db.VarChar(100)
-  content     String              @map("content")
-  variables   Json?               @map("variables")
-  status      String?             @default("draft") @map("status") @db.VarChar(20)
-  category    String?             @map("category") @db.VarChar(50)
-  created_by  Int?                @map("created_by")
-  created_at  DateTime?           @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at  DateTime?           @default(now()) @map("updated_at") @db.Timestamp(6)
-  pharmacy_id Int
-  campaigns   message_campaigns[]
-  creator     users?              @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  pharmacy    pharmacy            @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
-
-  @@index([pharmacy_id])
-  @@index([status], map: "idx_message_templates_status")
-  @@map("message_templates")
-}
-
-model message_campaigns {
-  id               Int                  @id @default(autoincrement())
-  name             String               @map("name") @db.VarChar(100)
-  template_id      Int?                 @map("template_id")
-  segments         Json                 @map("segments")
-  total_recipients Int?                 @default(0) @map("total_recipients")
-  sent_count       Int?                 @default(0) @map("sent_count")
-  delivered_count  Int?                 @default(0) @map("delivered_count")
-  read_count       Int?                 @default(0) @map("read_count")
-  conversion_count Int?                 @default(0) @map("conversion_count")
-  conversion_value Decimal?             @default(0) @map("conversion_value") @db.Decimal(10, 2)
-  status           String?              @default("draft") @map("status") @db.VarChar(20)
-  scheduled_for    DateTime?            @map("scheduled_for") @db.Timestamp(6)
-  sent_at          DateTime?            @map("sent_at") @db.Timestamp(6)
-  completed_at     DateTime?            @map("completed_at") @db.Timestamp(6)
-  created_by       Int?                 @map("created_by")
-  created_at       DateTime?            @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at       DateTime?            @default(now()) @map("updated_at") @db.Timestamp(6)
-  pharmacy_id      Int
-  creator          users?               @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  pharmacy         pharmacy             @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
-  template         message_templates?   @relation(fields: [template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  recipients       message_recipients[]
-
-  @@index([pharmacy_id])
-  @@index([status], map: "idx_message_campaigns_status")
-  @@map("message_campaigns")
-}
-
-model message_recipients {
-  id                 Int                @id @default(autoincrement())
-  client_id          Int?               @map("client_id")
-  campaign_id        Int?               @map("campaign_id")
-  phone              String?            @map("phone") @db.VarChar(20)
-  message            String?            @map("message")
-  status             String?            @default("pending") @map("status") @db.VarChar(20)
-  sent_at            DateTime?          @map("sent_at") @db.Timestamp(6)
-  delivered_at       DateTime?          @map("delivered_at") @db.Timestamp(6)
-  read_at            DateTime?          @map("read_at") @db.Timestamp(6)
-  converted_at       DateTime?          @map("converted_at") @db.Timestamp(6)
-  conversion_sale_id Int?               @map("conversion_sale_id")
-  created_at         DateTime?          @default(now()) @map("created_at") @db.Timestamp(6)
-  campaign           message_campaigns? @relation(fields: [campaign_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  client             clients?           @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  sales              sales?             @relation(fields: [conversion_sale_id], references: [id], onUpdate: NoAction)
-
-  @@index([campaign_id], map: "idx_message_recipients_campaign")
-  @@index([client_id], map: "idx_message_recipients_client")
-  @@index([status], map: "idx_message_recipients_status")
-  @@map("message_recipients")
-}
-
-model client_consent {
-  id                 Int       @id @default(autoincrement())
-  client_id          Int?      @unique @map("client_id")
-  whatsapp           Boolean?  @default(true) @map("whatsapp")
-  email              Boolean?  @default(true) @map("email")
-  sms                Boolean?  @default(true) @map("sms")
-  unsubscribed_at    DateTime? @map("unsubscribed_at") @db.Timestamp(6)
-  unsubscribe_reason String?   @map("unsubscribe_reason")
-  unsubscribe_token  String?   @unique @map("unsubscribe_token") @db.VarChar(100)
-  created_at         DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  client             clients?  @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([client_id], map: "idx_client_consent_client")
-  @@map("client_consent")
-}
-
-model ai_generated_messages {
-  id          Int       @id @default(autoincrement())
-  tone        String    @map("tone") @db.VarChar(20)
-  message     String    @map("message")
-  product_id  Int?      @map("product_id")
-  points_cost Int?      @map("points_cost")
-  usage_count Int?      @default(0) @map("usage_count")
-  like_count  Int?      @default(0) @map("like_count")
-  created_by  Int?      @map("created_by")
-  created_at  DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  creator     users?    @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  product     products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@index([product_id], map: "idx_ai_messages_product")
-  @@map("ai_generated_messages")
-}
-
-model loyalty_reward {
-  id           Int                    @id @default(autoincrement())
-  product_id   Int                    @map("product_id")
-  points_cost  Int                    @map("points_cost")
-  is_active    Boolean?               @default(true) @map("is_active")
-  description  String?                @map("description")
-  image_url    String?                @map("image_url") @db.VarChar(255)
-  max_quantity Int?                   @map("max_quantity")
-  start_date   DateTime?              @map("start_date") @db.Timestamp(6)
-  end_date     DateTime?              @map("end_date") @db.Timestamp(6)
-  created_at   DateTime?              @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at   DateTime?              @default(now()) @map("updated_at") @db.Timestamp(6)
-  product      products               @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  transactions loyalty_transactions[]
-
-  @@index([is_active], map: "idx_loyalty_rewards_active")
-  @@index([product_id], map: "idx_loyalty_rewards_product")
-  @@map("loyalty_rewards")
-}
-
-model loyalty_pack {
-  id           Int                     @id @default(autoincrement())
-  name         String                  @map("name") @db.VarChar(255)
-  description  String?                 @map("description")
-  points_cost  Int                     @map("points_cost")
-  is_active    Boolean?                @default(true) @map("is_active")
-  image_url    String?                 @map("image_url") @db.VarChar(255)
-  max_quantity Int?                    @map("max_quantity")
-  start_date   DateTime?               @map("start_date") @db.Timestamp(6)
-  end_date     DateTime?               @map("end_date") @db.Timestamp(6)
-  created_at   DateTime?               @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at   DateTime?               @default(now()) @map("updated_at") @db.Timestamp(6)
-  products     loyalty_pack_products[]
-  transactions loyalty_transactions[]
-
-  @@index([is_active], map: "idx_loyalty_packs_active")
-  @@map("loyalty_packs")
-}
-
-model loyalty_pack_products {
-  pack_id    Int
-  product_id Int
-  pack       loyalty_pack @relation(fields: [pack_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  product    products     @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-
-  @@id([pack_id, product_id])
-  @@map("loyalty_pack_products")
-}
-
-model loyalty_transactions {
-  id            Int             @id @default(autoincrement())
-  client_id     Int             @map("client_id")
-  points        Int
-  type          String          @map("type") @db.VarChar(50)
-  reason        String?         @map("reason")
-  sale_id       Int?            @map("sale_id")
-  reward_id     Int?            @map("reward_id")
-  pack_id       Int?            @map("pack_id")
-  product_value Decimal?        @map("product_value") @db.Decimal(10, 2)
-  created_at    DateTime?       @default(now()) @map("created_at") @db.Timestamp(6)
-  client        clients         @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  pack          loyalty_pack?   @relation(fields: [pack_id], references: [id], onUpdate: NoAction)
-  reward        loyalty_reward? @relation(fields: [reward_id], references: [id], onUpdate: NoAction)
-  sale          sales?          @relation(fields: [sale_id], references: [id], onUpdate: NoAction)
-
-  @@index([client_id], map: "idx_loyalty_transactions_client")
-  @@index([created_at], map: "idx_loyalty_transactions_created")
-  @@index([sale_id], map: "idx_loyalty_transactions_sale")
-  @@map("loyalty_transactions")
-}
-
-model loyalty_config {
-  id                        Int       @id @default(autoincrement())
-  points_per_unit           Int       @default(1) @map("points_per_unit")
-  currency_unit             Int       @default(10) @map("currency_unit")
-  min_purchase_for_points   Decimal   @default(0) @map("min_purchase_for_points") @db.Decimal(10, 2)
-  points_expiry_days        Int       @default(365) @map("points_expiry_days")
-  welcome_points            Int       @default(100) @map("welcome_points")
-  birthday_multiplier       Decimal   @default(2.0) @map("birthday_multiplier") @db.Decimal(3, 1)
-  first_purchase_multiplier Decimal   @default(1.5) @map("first_purchase_multiplier") @db.Decimal(3, 1)
-  is_active                 Boolean   @default(true) @map("is_active")
-  tier_thresholds           Json?     @map("tier_thresholds")
-  created_at                DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
-  updated_at                DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
-  pharmacy_id               Int       @unique
-  pharmacy                  pharmacy  @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
-
-  @@map("loyalty_config")
 }
 
 model credit_notes {
-  id               String    @id @default(cuid()) @db.VarChar(255)
+  id               String    @id @db.VarChar(255)
   supplier_id      String    @db.VarChar(255)
   reference        String    @unique @db.VarChar(50)
   issue_date       DateTime  @db.Date
@@ -568,8 +183,387 @@ model credit_notes {
   @@index([supplier_id], map: "idx_credit_notes_supplier")
 }
 
+model delivery_note_items {
+  id                Int            @id @default(autoincrement())
+  delivery_note_id  Int
+  product_id        Int
+  quantity          Int
+  unit_cost_pph     Decimal        @db.Decimal(10, 2)
+  suggested_ppv     Decimal?       @db.Decimal(10, 2)
+  expiration_date   DateTime       @db.Date
+  batch_number      String?        @db.VarChar(100)
+  subtotal          Decimal?       @db.Decimal(10, 2)
+  margin_percentage Decimal?       @db.Decimal(5, 2)
+  notes             String?
+  created_at        DateTime?      @default(now()) @db.Timestamp(6)
+  delivery_notes    delivery_notes @relation(fields: [delivery_note_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products          products       @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model delivery_notes {
+  id                  Int                   @id @default(autoincrement())
+  note_number         String                @unique @db.VarChar(50)
+  supplier_id         String                @db.VarChar(255)
+  bl_number           String?               @db.VarChar(100)
+  reception_date      DateTime              @db.Date
+  total_amount        Decimal?              @default(0) @db.Decimal(10, 2)
+  total_items         Int?                  @default(0)
+  payment_status      String?               @default("pending") @db.VarChar(20)
+  is_paid             Boolean?              @default(false)
+  paid_amount         Decimal?              @default(0) @db.Decimal(10, 2)
+  paid_date           DateTime?             @db.Timestamp(6)
+  notes               String?
+  received_by         Int?
+  created_at          DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamp(6)
+  delivery_note_items delivery_note_items[]
+  payment_obligations payment_obligations?
+}
+
+model employees {
+  id                                                                  Int                   @id @default(autoincrement())
+  user_id                                                             Int                   @unique
+  pharmacy_id                                                         Int
+  default_shift_id                                                    Int?
+  vacation_days                                                       Float                 @default(25)
+  vacation_days_used                                                  Float                 @default(0)
+  created_at                                                          DateTime              @default(now())
+  updated_at                                                          DateTime              @default(now())
+  phone                                                               String?               @db.VarChar(50)
+  address                                                             String?
+  cni                                                                 String?               @unique @db.VarChar(50)
+  birth_date                                                          DateTime?             @db.Date
+  marital_status                                                      String?               @db.VarChar(20)
+  children_count                                                      Int?                  @default(0)
+  shifts                                                              shifts?               @relation(fields: [default_shift_id], references: [id])
+  pharmacy                                                            pharmacy              @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+  users                                                               users                 @relation(fields: [user_id], references: [id])
+  shift_assignments                                                   shift_assignments[]
+  shift_swap_requests_shift_swap_requests_from_employee_idToemployees shift_swap_requests[] @relation("shift_swap_requests_from_employee_idToemployees")
+  shift_swap_requests_shift_swap_requests_to_employee_idToemployees   shift_swap_requests[] @relation("shift_swap_requests_to_employee_idToemployees")
+  time_off_requests                                                   time_off_requests[]
+
+  @@index([pharmacy_id])
+}
+
+model guard_schedules {
+  id         Int      @id @default(autoincrement())
+  shift_id   Int
+  start_date DateTime
+  end_date   DateTime
+  created_at DateTime @default(now())
+  updated_at DateTime @default(now())
+  shifts     shifts   @relation(fields: [shift_id], references: [id], onDelete: Cascade)
+}
+
+model health_records {
+  id                       Int       @id @default(autoincrement())
+  client_id                Int
+  glucose_level            Decimal?  @db.Decimal(5, 2)
+  blood_pressure_systolic  Int?
+  blood_pressure_diastolic Int?
+  weight                   Decimal?  @db.Decimal(5, 2)
+  heart_rate               Int?
+  record_date              DateTime  @db.Date
+  notes                    String?
+  glucose_status           String?   @db.VarChar(20)
+  blood_pressure_status    String?   @db.VarChar(20)
+  heart_rate_status        String?   @db.VarChar(20)
+  created_at               DateTime? @default(now()) @db.Timestamp(6)
+  updated_at               DateTime? @default(now()) @db.Timestamp(6)
+  clients                  clients   @relation(fields: [client_id], references: [id], onDelete: Cascade)
+
+  @@index([client_id], map: "idx_health_records_client")
+  @@index([record_date], map: "idx_health_records_date")
+}
+
+model holidays {
+  id           Int      @id @default(autoincrement())
+  pharmacy_id  Int
+  name         String
+  date         DateTime
+  is_recurring Boolean  @default(false)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @default(now())
+  pharmacy     pharmacy @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+
+  @@index([pharmacy_id])
+}
+
+model inventory_lots {
+  id              Int               @id @default(autoincrement())
+  product_id      Int
+  pharmacy_id     Int
+  batch_number    String            @db.VarChar(100)
+  expiry_date     DateTime          @db.Date
+  quantity        Int
+  created_at      DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?         @default(now()) @db.Timestamp(6)
+  pharmacy        pharmacy          @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+  products        products          @relation(fields: [product_id], references: [id], onUpdate: NoAction)
+  stock_movements stock_movements[]
+
+  @@unique([product_id, pharmacy_id, batch_number])
+  @@index([expiry_date])
+  @@index([pharmacy_id])
+}
+
+model loyalty_config {
+  id                        Int       @id @default(autoincrement())
+  pharmacy_id               Int       @unique
+  points_per_unit           Int       @default(1)
+  currency_unit             Int       @default(10)
+  min_purchase_for_points   Decimal   @default(0) @db.Decimal(10, 2)
+  points_expiry_days        Int       @default(365)
+  welcome_points            Int       @default(100)
+  birthday_multiplier       Decimal   @default(2.0) @db.Decimal(3, 1)
+  first_purchase_multiplier Decimal   @default(1.5) @db.Decimal(3, 1)
+  is_active                 Boolean   @default(true)
+  tier_thresholds           Json?
+  created_at                DateTime? @default(now()) @db.Timestamp(6)
+  updated_at                DateTime? @default(now()) @db.Timestamp(6)
+  pharmacy                  pharmacy  @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+}
+
+model loyalty_pack_products {
+  pack_id       Int
+  product_id    Int
+  loyalty_packs loyalty_packs @relation(fields: [pack_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products      products      @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([pack_id, product_id])
+}
+
+model loyalty_packs {
+  id                    Int                     @id @default(autoincrement())
+  name                  String                  @db.VarChar(255)
+  description           String?
+  points_cost           Int
+  is_active             Boolean?                @default(true)
+  image_url             String?                 @db.VarChar(255)
+  max_quantity          Int?
+  start_date            DateTime?               @db.Timestamp(6)
+  end_date              DateTime?               @db.Timestamp(6)
+  created_at            DateTime?               @default(now()) @db.Timestamp(6)
+  updated_at            DateTime?               @default(now()) @db.Timestamp(6)
+  loyalty_pack_products loyalty_pack_products[]
+  loyalty_transactions  loyalty_transactions[]
+
+  @@index([is_active], map: "idx_loyalty_packs_active")
+}
+
+model loyalty_rewards {
+  id                   Int                    @id @default(autoincrement())
+  product_id           Int
+  points_cost          Int
+  is_active            Boolean?               @default(true)
+  description          String?
+  image_url            String?                @db.VarChar(255)
+  max_quantity         Int?
+  start_date           DateTime?              @db.Timestamp(6)
+  end_date             DateTime?              @db.Timestamp(6)
+  created_at           DateTime?              @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?              @default(now()) @db.Timestamp(6)
+  products             products               @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  loyalty_transactions loyalty_transactions[]
+
+  @@index([is_active], map: "idx_loyalty_rewards_active")
+  @@index([product_id], map: "idx_loyalty_rewards_product")
+}
+
+model loyalty_transactions {
+  id              Int              @id @default(autoincrement())
+  client_id       Int
+  points          Int
+  type            String           @db.VarChar(50)
+  reason          String?
+  sale_id         Int?
+  reward_id       Int?
+  pack_id         Int?
+  product_value   Decimal?         @db.Decimal(10, 2)
+  created_at      DateTime?        @default(now()) @db.Timestamp(6)
+  clients         clients          @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  loyalty_packs   loyalty_packs?   @relation(fields: [pack_id], references: [id], onUpdate: NoAction)
+  loyalty_rewards loyalty_rewards? @relation(fields: [reward_id], references: [id], onUpdate: NoAction)
+  sales           sales?           @relation(fields: [sale_id], references: [id], onUpdate: NoAction)
+
+  @@index([client_id], map: "idx_loyalty_transactions_client")
+  @@index([created_at], map: "idx_loyalty_transactions_created")
+  @@index([sale_id], map: "idx_loyalty_transactions_sale")
+}
+
+model message_campaigns {
+  id                 Int                  @id @default(autoincrement())
+  pharmacy_id        Int
+  name               String               @db.VarChar(100)
+  template_id        Int?
+  segments           Json
+  total_recipients   Int?                 @default(0)
+  sent_count         Int?                 @default(0)
+  delivered_count    Int?                 @default(0)
+  read_count         Int?                 @default(0)
+  conversion_count   Int?                 @default(0)
+  conversion_value   Decimal?             @default(0) @db.Decimal(10, 2)
+  status             String?              @default("draft") @db.VarChar(20)
+  scheduled_for      DateTime?            @db.Timestamp(6)
+  sent_at            DateTime?            @db.Timestamp(6)
+  completed_at       DateTime?            @db.Timestamp(6)
+  created_by         Int?
+  created_at         DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?            @default(now()) @db.Timestamp(6)
+  users              users?               @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pharmacy           pharmacy             @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+  message_templates  message_templates?   @relation(fields: [template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  message_recipients message_recipients[]
+
+  @@index([status], map: "idx_message_campaigns_status")
+  @@index([pharmacy_id])
+}
+
+model message_recipients {
+  id                 Int                @id @default(autoincrement())
+  client_id          Int?
+  campaign_id        Int?
+  phone              String?            @db.VarChar(20)
+  message            String?
+  status             String?            @default("pending") @db.VarChar(20)
+  sent_at            DateTime?          @db.Timestamp(6)
+  delivered_at       DateTime?          @db.Timestamp(6)
+  read_at            DateTime?          @db.Timestamp(6)
+  converted_at       DateTime?          @db.Timestamp(6)
+  conversion_sale_id Int?
+  created_at         DateTime?          @default(now()) @db.Timestamp(6)
+  message_campaigns  message_campaigns? @relation(fields: [campaign_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  clients            clients?           @relation(fields: [client_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  sales              sales?             @relation(fields: [conversion_sale_id], references: [id], onUpdate: NoAction)
+
+  @@index([campaign_id], map: "idx_message_recipients_campaign")
+  @@index([client_id], map: "idx_message_recipients_client")
+  @@index([status], map: "idx_message_recipients_status")
+}
+
+model message_templates {
+  id                Int                 @id @default(autoincrement())
+  pharmacy_id       Int
+  name              String              @db.VarChar(100)
+  content           String
+  variables         Json?
+  status            String?             @default("draft") @db.VarChar(20)
+  category          String?             @db.VarChar(50)
+  created_by        Int?
+  created_at        DateTime?           @default(now()) @db.Timestamp(6)
+  updated_at        DateTime?           @default(now()) @db.Timestamp(6)
+  message_campaigns message_campaigns[]
+  users             users?              @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pharmacy          pharmacy            @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+
+  @@index([status], map: "idx_message_templates_status")
+  @@index([pharmacy_id])
+}
+
+model obligation_payments {
+  id                  Int                 @id @default(autoincrement())
+  obligation_id       Int
+  amount              Decimal             @db.Decimal(10, 2)
+  payment_method      String              @db.VarChar(30)
+  reference           String?             @db.VarChar(100)
+  payment_date        DateTime?           @default(now()) @db.Timestamp(6)
+  notes               String?
+  created_at          DateTime?           @default(now()) @db.Timestamp(6)
+  payment_obligations payment_obligations @relation(fields: [obligation_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model payment_obligations {
+  id                  Int                   @id @default(autoincrement())
+  delivery_note_id    Int                   @unique
+  supplier_id         String                @db.VarChar(255)
+  total_amount        Decimal               @db.Decimal(10, 2)
+  paid_amount         Decimal?              @default(0) @db.Decimal(10, 2)
+  pending_amount      Decimal               @db.Decimal(10, 2)
+  due_date            DateTime              @db.Date
+  status              String?               @default("pending") @db.VarChar(20)
+  payment_terms       String?               @db.VarChar(50)
+  notes               String?
+  created_at          DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamp(6)
+  obligation_payments obligation_payments[]
+  delivery_notes      delivery_notes        @relation(fields: [delivery_note_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  suppliers           suppliers             @relation(fields: [supplier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model payments {
+  id             Int       @id @default(autoincrement())
+  sale_id        Int
+  amount         Decimal   @db.Decimal(10, 2)
+  payment_method String    @db.VarChar(30)
+  reference      String?   @db.VarChar(100)
+  status         String?   @default("completed") @db.VarChar(20)
+  notes          String?
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+  sales          sales     @relation(fields: [sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([sale_id], map: "idx_payments_sale_id")
+}
+
+model pharmacy {
+  id                 Int                  @id @default(autoincrement())
+  name               String               @unique
+  license            String               @unique
+  address            String?
+  phone              String?
+  email              String?
+  is_active          Boolean              @default(true)
+  created_at         DateTime             @default(now())
+  updated_at         DateTime
+  subscription_id    Int?                 @unique
+  SystemNotification SystemNotification[]
+  clients            clients[]
+  employees          employees[]
+  holidays           holidays[]
+  inventory_lots     inventory_lots[]
+  loyalty_config     loyalty_config?
+  message_campaigns  message_campaigns[]
+  message_templates  message_templates[]
+  Subscription       Subscription?        @relation(fields: [subscription_id], references: [id])
+  sales              sales[]
+  shifts             shifts[]
+  stock_movements    stock_movements[]
+  suppliers          suppliers[]
+  users              users[]
+}
+
+model pharmacy_config_overrides {
+  id                     Int      @id @default(autoincrement())
+  shift_id               Int
+  date                   DateTime
+  min_employees_required Int
+  created_at             DateTime @default(now())
+  updated_at             DateTime @default(now())
+  shifts                 shifts   @relation(fields: [shift_id], references: [id], onDelete: Cascade)
+
+  @@unique([shift_id, date])
+}
+
+model pharmacy_configs {
+  id                     Int      @id @default(autoincrement())
+  shift_id               Int      @unique
+  min_employees_required Int      @default(1)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @default(now())
+  shifts                 shifts   @relation(fields: [shift_id], references: [id], onDelete: Cascade)
+}
+
+model price_history {
+  id         Int      @id @default(autoincrement())
+  product_id Int
+  date       DateTime @default(now()) @db.Timestamp(6)
+  priceppv   Decimal  @db.Decimal(10, 2)
+  pricepph   Decimal  @db.Decimal(10, 2)
+  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
 model product_purchases {
-  id               String    @id @default(cuid()) @db.VarChar(255)
+  id               String    @id @db.VarChar(255)
   supplier_id      String    @db.VarChar(255)
   product_id       Int
   purchase_date    DateTime  @db.Date
@@ -588,8 +582,204 @@ model product_purchases {
   @@index([supplier_id], map: "idx_product_purchases_supplier")
 }
 
+model products {
+  id                     Int                     @id @default(autoincrement())
+  name                   String                  @db.VarChar(255)
+  description            String?
+  pricePPV               Decimal                 @db.Decimal(10, 2)
+  pricePPH               Decimal                 @db.Decimal(10, 2)
+  stock                  Int                     @default(0)
+  category               String?                 @db.VarChar(100)
+  sku                    String?                 @unique @db.VarChar(50)
+  imageUrl               String?
+  expirationDate         DateTime?               @db.Date
+  createdAt              DateTime?               @default(now()) @db.Timestamp(6)
+  updatedAt              DateTime?               @default(now()) @db.Timestamp(6)
+  dosageForm             String?                 @db.VarChar(50)
+  barcode                String?                 @unique(map: "products_barcode_unique", where: raw("(barcode IS NOT NULL)")) @db.VarChar(100)
+  zone                   String?                 @db.VarChar(50)
+  active                 Boolean?                @default(true)
+  laboratory             String?                 @db.VarChar(100)
+  prescription           Boolean?                @default(false)
+  posologyadult          String?
+  posologychild          String?
+  contraindications      String?
+  monograph              String?
+  code_atc               String?                 @db.VarChar(20)
+  composition            String?
+  dosage                 String?                 @db.VarChar(100)
+  presentation           String?                 @db.VarChar(255)
+  princeps               Boolean?                @default(false)
+  statut                 String?                 @db.VarChar(50)
+  tableau                String?                 @db.VarChar(50)
+  indications            String?
+  substance_psychoactive Boolean?                @default(false)
+  nature_produit         String?                 @db.VarChar(100)
+  classe_therapeutique   String?                 @db.VarChar(100)
+  distributeur           String?                 @db.VarChar(255)
+  mise_a_jour_le         DateTime?               @db.Date
+  ajoute_le              DateTime?               @db.Date
+  derniere_mise_a_jour   DateTime?               @db.Timestamp(6)
+  url_source             String?
+  titulo_completo        String?
+  nombre_original        String?                 @db.VarChar(255)
+  ai_generated_messages  ai_generated_messages[]
+  delivery_note_items    delivery_note_items[]
+  inventory_lots         inventory_lots[]
+  loyalty_pack_products  loyalty_pack_products[]
+  loyalty_rewards        loyalty_rewards[]
+  price_history          price_history[]
+  product_purchases      product_purchases[]
+  sale_items             sale_items[]
+  stock_movements        stock_movements[]
+}
+
+model sale_items {
+  id                  Int       @id @default(autoincrement())
+  sale_id             Int
+  product_id          Int
+  quantity            Int
+  unit_price_ppv      Decimal   @db.Decimal(10, 2)
+  unit_price_pph      Decimal   @db.Decimal(10, 2)
+  discount_amount     Decimal?  @default(0) @db.Decimal(10, 2)
+  discount_percentage Decimal?  @db.Decimal(5, 2)
+  lot_id              Int?
+  expiration_date     DateTime? @db.Date
+  notes               String?
+  created_at          DateTime? @default(now()) @db.Timestamp(6)
+  subtotal            Decimal   @default(0) @db.Decimal(10, 2)
+  total               Decimal   @default(0) @db.Decimal(10, 2)
+  margin              Decimal   @default(0) @db.Decimal(10, 2)
+  margin_percentage   Decimal   @default(0) @db.Decimal(5, 2)
+  products            products  @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sales               sales     @relation(fields: [sale_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model sales {
+  id                     Int                    @id @default(autoincrement())
+  pharmacy_id            Int
+  sale_number            String                 @unique @db.VarChar(50)
+  client_id              Int?
+  user_id                Int
+  subtotal               Decimal                @db.Decimal(10, 2)
+  discount_amount        Decimal?               @default(0) @db.Decimal(10, 2)
+  discount_type          String?                @db.VarChar(20)
+  discount_percentage    Decimal?               @db.Decimal(5, 2)
+  tax_amount             Decimal?               @default(0) @db.Decimal(10, 2)
+  total                  Decimal                @db.Decimal(10, 2)
+  paid_amount            Decimal?               @default(0) @db.Decimal(10, 2)
+  change_amount          Decimal?               @default(0) @db.Decimal(10, 2)
+  payment_method         String?                @db.VarChar(30)
+  payment_status         String?                @default("pending") @db.VarChar(20)
+  sale_status            String?                @default("completed") @db.VarChar(20)
+  notes                  String?
+  adult_flag             Boolean?
+  pregnant_flag          Boolean?
+  lactating_flag         Boolean?
+  chronic_condition_flag Boolean?
+  usual_medication_flag  Boolean?
+  amount_applied         Decimal?               @default(0) @db.Decimal(10, 2)
+  amount_pending         Decimal?               @default(0) @db.Decimal(10, 2)
+  is_debt_paid           Boolean?               @default(false)
+  created_at             DateTime?              @default(now()) @db.Timestamp(6)
+  updated_at             DateTime?              @default(now()) @db.Timestamp(6)
+  loyalty_transactions   loyalty_transactions[]
+  message_recipients     message_recipients[]
+  payments               payments[]
+  sale_items             sale_items[]
+  clients                clients?               @relation(fields: [client_id], references: [id], onUpdate: NoAction)
+  pharmacy               pharmacy               @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+  users                  users                  @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([client_id])
+  @@index([payment_status])
+  @@index([pharmacy_id])
+}
+
+model session {
+  sid    String   @id @db.VarChar
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+}
+
+model shift_assignments {
+  id          Int       @id @default(autoincrement())
+  employee_id Int
+  shift_id    Int
+  date        DateTime
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @default(now())
+  employees   employees @relation(fields: [employee_id], references: [id])
+  shifts      shifts    @relation(fields: [shift_id], references: [id])
+}
+
+model shift_swap_requests {
+  id                                                        Int       @id @default(autoincrement())
+  from_employee_id                                          Int
+  to_employee_id                                            Int
+  from_shift_id                                             Int
+  to_shift_id                                               Int
+  date                                                      DateTime
+  status                                                    String    @default("pending")
+  notes                                                     String?
+  reviewed_by                                               Int?
+  reviewed_at                                               DateTime?
+  created_at                                                DateTime  @default(now())
+  updated_at                                                DateTime  @default(now())
+  employees_shift_swap_requests_from_employee_idToemployees employees @relation("shift_swap_requests_from_employee_idToemployees", fields: [from_employee_id], references: [id])
+  shifts_shift_swap_requests_from_shift_idToshifts          shifts    @relation("shift_swap_requests_from_shift_idToshifts", fields: [from_shift_id], references: [id])
+  employees_shift_swap_requests_to_employee_idToemployees   employees @relation("shift_swap_requests_to_employee_idToemployees", fields: [to_employee_id], references: [id])
+  shifts_shift_swap_requests_to_shift_idToshifts            shifts    @relation("shift_swap_requests_to_shift_idToshifts", fields: [to_shift_id], references: [id])
+}
+
+model shifts {
+  id                                                            Int                         @id @default(autoincrement())
+  pharmacy_id                                                   Int
+  name                                                          String
+  start_time                                                    String
+  end_time                                                      String
+  is_guard                                                      Boolean                     @default(false)
+  min_employees_required                                        Int                         @default(1)
+  created_at                                                    DateTime                    @default(now())
+  updated_at                                                    DateTime                    @default(now())
+  color                                                         String?                     @default("#3B82F6") @db.VarChar(20)
+  deleted_at                                                    DateTime?                   @db.Timestamp(6)
+  employees                                                     employees[]
+  guard_schedules                                               guard_schedules[]
+  pharmacy_config_overrides                                     pharmacy_config_overrides[]
+  pharmacy_configs                                              pharmacy_configs?
+  shift_assignments                                             shift_assignments[]
+  shift_swap_requests_shift_swap_requests_from_shift_idToshifts shift_swap_requests[]       @relation("shift_swap_requests_from_shift_idToshifts")
+  shift_swap_requests_shift_swap_requests_to_shift_idToshifts   shift_swap_requests[]       @relation("shift_swap_requests_to_shift_idToshifts")
+  pharmacy                                                      pharmacy                    @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+
+  @@index([pharmacy_id])
+}
+
+model stock_movements {
+  id             Int             @id @default(autoincrement())
+  product_id     Int
+  pharmacy_id    Int
+  lot_id         Int?
+  type           String          @db.VarChar(20)
+  quantity       Int
+  stock_after    Int
+  notes          String?
+  created_at     DateTime?       @default(now()) @db.Timestamp(6)
+  user_id        Int?
+  inventory_lots inventory_lots? @relation(fields: [lot_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pharmacy       pharmacy        @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+  products       products        @relation(fields: [product_id], references: [id], onUpdate: NoAction)
+  users          users?          @relation(fields: [user_id], references: [id])
+
+  @@index([pharmacy_id])
+  @@index([product_id])
+}
+
 model supplier_addresses {
-  id            String    @id @default(cuid()) @db.VarChar(255)
+  id            String    @id @db.VarChar(255)
   supplier_id   String    @db.VarChar(255)
   street_number String?   @db.VarChar(20)
   street_name   String    @db.VarChar(255)
@@ -606,7 +796,7 @@ model supplier_addresses {
 }
 
 model supplier_phones {
-  id          String    @id @default(cuid()) @db.VarChar(255)
+  id          String    @id @db.VarChar(255)
   supplier_id String    @db.VarChar(255)
   number      String    @db.VarChar(50)
   type        String    @db.VarChar(20)
@@ -620,66 +810,29 @@ model supplier_phones {
   @@index([supplier_id], map: "idx_supplier_phones_supplier_id")
 }
 
-model shifts {
-  id                        Int                         @id @default(autoincrement())
-  name                      String
-  start_time                String
-  end_time                  String
-  is_guard                  Boolean                     @default(false)
-  min_employees_required    Int                         @default(1)
-  created_at                DateTime                    @default(now())
-  updated_at                DateTime
-  pharmacy_id               Int
-  color                     String                      @default("#3B82F6")
-  deleted_at                DateTime?
-  employees                 employees[]
-  guard_schedules           guard_schedules[]
-  pharmacy_config_overrides pharmacy_config_overrides[]
-  pharmacy_configs          pharmacy_configs?
-  shift_assignments         shift_assignments[]
-  from_shift_swaps          shift_swap_requests[]       @relation("from_shift")
-  to_shift_swaps            shift_swap_requests[]       @relation("to_shift")
-  pharmacy                  pharmacy                    @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
+model suppliers {
+  id                  String                @id @db.VarChar(255)
+  pharmacy_id         Int
+  company_name        String                @db.VarChar(255)
+  email               String?               @db.VarChar(255)
+  website             String?               @db.VarChar(255)
+  fax                 String?               @db.VarChar(50)
+  payment_terms       String?               @db.VarChar(100)
+  tax_id              String?               @db.VarChar(50)
+  registration_number String?               @db.VarChar(50)
+  balance             Decimal?              @default(0) @db.Decimal(10, 2)
+  is_active           Boolean?              @default(true)
+  notes               String?
+  created_at          DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamp(6)
+  credit_notes        credit_notes[]
+  payment_obligations payment_obligations[]
+  product_purchases   product_purchases[]
+  supplier_addresses  supplier_addresses[]
+  supplier_phones     supplier_phones[]
+  pharmacy            pharmacy              @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
 
   @@index([pharmacy_id])
-  @@index([deleted_at])
-}
-
-model employees {
-  id                       Int                   @id @default(autoincrement())
-  user_id                  Int                   @unique
-  default_shift_id         Int?
-  vacation_days            Float                 @default(25)
-  vacation_days_used       Float                 @default(0)
-  created_at               DateTime              @default(now())
-  updated_at               DateTime
-  pharmacy_id              Int
-  address                  String?
-  birth_date               DateTime?
-  children_count           Int                   @default(0)
-  cni                      String?
-  marital_status           String?
-  phone                    String?
-  default_shift            shifts?               @relation(fields: [default_shift_id], references: [id])
-  pharmacy                 pharmacy              @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
-  user                     users                 @relation(fields: [user_id], references: [id])
-  shift_assignments        shift_assignments[]
-  shift_swap_requests_from shift_swap_requests[] @relation("from_employee")
-  shift_swap_requests_to   shift_swap_requests[] @relation("to_employee")
-  time_off_requests        time_off_requests[]
-
-  @@index([pharmacy_id])
-}
-
-model shift_assignments {
-  id          Int       @id @default(autoincrement())
-  employee_id Int
-  shift_id    Int
-  date        DateTime
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @default(now())
-  employee    employees @relation(fields: [employee_id], references: [id])
-  shift       shifts    @relation(fields: [shift_id], references: [id])
 }
 
 model time_off_requests {
@@ -696,147 +849,75 @@ model time_off_requests {
   coverage_details Json?
   created_at       DateTime  @default(now())
   updated_at       DateTime  @default(now())
-  employee         employees @relation(fields: [employee_id], references: [id])
+  employees        employees @relation(fields: [employee_id], references: [id])
 }
 
-model shift_swap_requests {
-  id               Int       @id @default(autoincrement())
-  from_employee_id Int
-  to_employee_id   Int
-  from_shift_id    Int
-  to_shift_id      Int
-  date             DateTime
-  status           String    @default("pending")
-  notes            String?
-  reviewed_by      Int?
-  reviewed_at      DateTime?
-  created_at       DateTime  @default(now())
-  updated_at       DateTime  @default(now())
-  from_employee    employees @relation("from_employee", fields: [from_employee_id], references: [id])
-  from_shift       shifts    @relation("from_shift", fields: [from_shift_id], references: [id])
-  to_employee      employees @relation("to_employee", fields: [to_employee_id], references: [id])
-  to_shift         shifts    @relation("to_shift", fields: [to_shift_id], references: [id])
+model users {
+  id                    Int                     @id @default(autoincrement())
+  email                 String                  @unique
+  full_name             String?
+  password              String?
+  role                  String                  @default("EMPLOYEE")
+  is_active             Boolean                 @default(true)
+  pharmacy_id           Int?
+  created_at            DateTime                @default(now())
+  updated_at            DateTime
+  temp_password         String?
+  temp_password_expires DateTime?               @db.Timestamp(6)
+  AdminLog              AdminLog[]
+  SystemNotification    SystemNotification[]
+  absence_requests      absence_requests[]
+  ai_generated_messages ai_generated_messages[]
+  employees             employees?
+  message_campaigns     message_campaigns[]
+  message_templates     message_templates[]
+  sales                 sales[]
+  stock_movements       stock_movements[]
+  pharmacy              pharmacy?               @relation(fields: [pharmacy_id], references: [id])
 }
 
-model pharmacy_configs {
-  id                     Int      @id @default(autoincrement())
-  shift_id               Int      @unique
-  min_employees_required Int      @default(1)
-  created_at             DateTime @default(now())
-  updated_at             DateTime @default(now())
-  shift                  shifts   @relation(fields: [shift_id], references: [id], onDelete: Cascade)
+model absence_requests {
+  id           String              @id @default(dbgenerated("(gen_random_uuid())::text"))
+  employeeId   Int
+  type         absence_type_enum
+  startDate    DateTime
+  endDate      DateTime
+  reason       String?
+  adminComment String?
+  status       request_status_enum @default(PENDING)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @default(now())
+  users        users               @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_absence_requests_employee")
+
+  @@index([employeeId, status, startDate, endDate], map: "idx_absence_requests_employee_status_dates")
+  @@index([employeeId], map: "idx_absence_requests_employeeid")
+  @@index([status], map: "idx_absence_requests_status")
 }
 
-model pharmacy_config_overrides {
-  id                     Int      @id @default(autoincrement())
-  shift_id               Int
-  date                   DateTime
-  min_employees_required Int
-  created_at             DateTime @default(now())
-  updated_at             DateTime @default(now())
-  shift                  shifts   @relation(fields: [shift_id], references: [id], onDelete: Cascade)
-
-  @@unique([shift_id, date])
+enum AdminActionType {
+  IMPERSONATE
+  EXTEND_COURTESY
+  RENEW_LICENSE
+  SUSPEND_PHARMACY
+  ACTIVATE_PHARMACY
+  SEND_BROADCAST
+  UPDATE_SUBSCRIPTION
 }
 
-model holidays {
-  id           Int      @id @default(autoincrement())
-  name         String
-  date         DateTime
-  is_recurring Boolean  @default(false)
-  created_at   DateTime @default(now())
-  updated_at   DateTime @default(now())
-  pharmacy_id  Int
-  pharmacy     pharmacy @relation(fields: [pharmacy_id], references: [id], onDelete: Cascade)
-
-  @@index([pharmacy_id])
+enum NotificationTarget {
+  ALL
+  SPECIFIC_PHARMACY
+  INACTIVE
+  ACTIVE
+  GRACE_PERIOD
+  SUSPENDED
 }
 
-model guard_schedules {
-  id         Int      @id @default(autoincrement())
-  shift_id   Int
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-  end_date   DateTime
-  start_date DateTime
-  shift      shifts   @relation(fields: [shift_id], references: [id], onDelete: Cascade)
-}
-
-model Subscription {
-  id                Int                  @id @default(autoincrement())
-  pharmacy_id       Int                  @unique
-  plan              SubscriptionPlan     @default(BASIC)
-  status            SubscriptionStatus   @default(TRIAL)
-  start_date        DateTime             @default(now())
-  end_date          DateTime
-  next_billing_date DateTime?
-  trial_end_date    DateTime?
-  created_at        DateTime             @default(now())
-  updated_at        DateTime             @updatedAt
-  payments          PaymentLog[]
-  notifications     SystemNotification[]
-  pharmacy          pharmacy?
-
-  @@index([status])
-  @@index([end_date])
-}
-
-model PaymentLog {
-  id              Int           @id @default(autoincrement())
-  subscription_id Int
-  amount          Decimal       @db.Decimal(10, 2)
-  currency        String        @default("MAD")
-  payment_method  String
-  status          PaymentStatus @default(PENDING)
-  transaction_id  String?       @unique
-  invoice_url     String?
-  error_message   String?
-  paid_at         DateTime?
-  created_at      DateTime      @default(now())
-  subscription    Subscription  @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
-
-  @@index([status])
-  @@index([created_at])
-}
-
-model SystemNotification {
-  id              Int                @id @default(autoincrement())
-  target          NotificationTarget @default(ALL)
-  pharmacy_id     Int?
-  title           String
-  message         String
-  action_url      String?
-  is_read         Boolean            @default(false)
-  read_by         Json?
-  sent_at         DateTime           @default(now())
-  expires_at      DateTime?
-  created_by      Int
-  subscription_id Int?
-  creator         users              @relation("creator", fields: [created_by], references: [id])
-  pharmacy        pharmacy?          @relation(fields: [pharmacy_id], references: [id])
-  subscription    Subscription?      @relation(fields: [subscription_id], references: [id])
-
-  @@index([target])
-  @@index([sent_at])
-  @@index([is_read])
-  @@index([pharmacy_id])
-}
-
-model AdminLog {
-  id          Int             @id @default(autoincrement())
-  admin_id    Int
-  action      AdminActionType
-  target_type String
-  target_id   Int
-  details     Json?
-  ip_address  String?
-  user_agent  String?
-  created_at  DateTime        @default(now())
-  admin       users           @relation(fields: [admin_id], references: [id])
-
-  @@index([admin_id])
-  @@index([action])
-  @@index([created_at])
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
 }
 
 enum SubscriptionPlan {
@@ -852,110 +933,15 @@ enum SubscriptionStatus {
   CANCELLED
 }
 
-enum PaymentStatus {
+enum absence_type_enum {
+  VACATION
+  SICK_LEAVE
+  MATERNITY_PATERNITY
+  PERSONAL_AFFAIRS
+}
+
+enum request_status_enum {
   PENDING
-  COMPLETED
-  FAILED
-  REFUNDED
-}
-
-enum NotificationTarget {
-  ALL
-  SPECIFIC_PHARMACY
-  INACTIVE
-  ACTIVE
-  GRACE_PERIOD
-  SUSPENDED
-}
-
-enum AdminActionType {
-  IMPERSONATE
-  EXTEND_COURTESY
-  RENEW_LICENSE
-  SUSPEND_PHARMACY
-  ACTIVATE_PHARMACY
-  SEND_BROADCAST
-  UPDATE_SUBSCRIPTION
-}
-
-model delivery_note {
-  id              Int                @id @default(autoincrement())
-  note_number     String             @unique @db.VarChar(50)
-  supplier_id     String             @db.VarChar(255)
-  bl_number       String?            @db.VarChar(100)
-  reception_date  DateTime           @db.Date
-  total_amount    Decimal            @default(0) @db.Decimal(10, 2)
-  total_items     Int                @default(0)
-  payment_status  String             @default("pending") @db.VarChar(20)
-  is_paid         Boolean            @default(false)
-  paid_amount     Decimal            @default(0) @db.Decimal(10, 2)
-  paid_date       DateTime?          @db.Timestamp(6)
-  notes           String?
-  received_by     Int?
-  created_at      DateTime           @default(now()) @db.Timestamp(6)
-  updated_at      DateTime           @default(now()) @db.Timestamp(6)
-  
-  supplier        suppliers          @relation(fields: [supplier_id], references: [id])
-  items           delivery_note_items[]
-  receiver        users?             @relation("received_deliveries", fields: [received_by], references: [id])
-  payment_obligation  payment_obligation?
-
-  @@map("delivery_notes")
-}
-
-model delivery_note_items {
-  id                 Int       @id @default(autoincrement())
-  delivery_note_id   Int
-  product_id         Int
-  quantity           Int
-  unit_cost_pph      Decimal   @db.Decimal(10, 2)
-  suggested_ppv      Decimal?  @db.Decimal(10, 2)
-  expiration_date    DateTime  @db.Date
-  batch_number       String?   @db.VarChar(100)
-  subtotal           Decimal?  @db.Decimal(10, 2)
-  margin_percentage  Decimal?  @db.Decimal(5, 2)
-  notes              String?
-  created_at         DateTime? @default(now()) @db.Timestamp(6)
-  
-  delivery_note      delivery_note @relation(fields: [delivery_note_id], references: [id])
-  product            products      @relation(fields: [product_id], references: [id])
-  inventory_lots     inventory_lots[]
-
-  @@map("delivery_note_items")
-}
-
-model payment_obligation {
-  id               Int       @id @default(autoincrement())
-  delivery_note_id Int       @unique
-  supplier_id      String    @db.VarChar(255)
-  total_amount     Decimal   @db.Decimal(10, 2)
-  paid_amount      Decimal   @default(0) @db.Decimal(10, 2)
-  pending_amount   Decimal   @db.Decimal(10, 2)
-  due_date         DateTime  @db.Date
-  status           String    @default("pending") @db.VarChar(20)
-  payment_terms    String?   @db.VarChar(50)
-  notes            String?
-  created_at       DateTime  @default(now()) @db.Timestamp(6)
-  updated_at       DateTime  @default(now()) @db.Timestamp(6)
-  
-  delivery_note    delivery_note       @relation(fields: [delivery_note_id], references: [id])
-  supplier         suppliers           @relation(fields: [supplier_id], references: [id])
-  payments         obligation_payment[]
-
-  @@map("payment_obligations")
-}
-
-model obligation_payment {
-  id             Int       @id @default(autoincrement())
-  obligation_id  Int
-  amount         Decimal   @db.Decimal(10, 2)
-  payment_method String    @db.VarChar(30)
-  reference      String?   @db.VarChar(100)
-  payment_date   DateTime  @default(now()) @db.Timestamp(6)
-  notes          String?
-  created_at     DateTime  @default(now()) @db.Timestamp(6)
-  
-  obligation     payment_obligation @relation(fields: [obligation_id], references: [id])
-
-  @@map("obligation_payments")
+  APPROVED
+  REJECTED
 }

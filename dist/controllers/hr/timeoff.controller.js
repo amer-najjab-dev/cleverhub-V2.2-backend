@@ -10,7 +10,7 @@ exports.timeOffController = {
             if (status)
                 where.status = status;
             if (employeeId)
-                where.employee_id = parseInt(employeeId);
+                where.employees_id = parseInt(employeeId);
             if (startDate && endDate) {
                 where.start_date = { gte: new Date(startDate) };
                 where.end_date = { lte: new Date(endDate) };
@@ -98,7 +98,7 @@ exports.timeOffController = {
             const userId = req.user?.id;
             const request = await server_1.prisma.time_off_requests.findUnique({
                 where: { id: parseInt(id) },
-                include: { employee: true }
+                include: { employees: true }
             });
             if (!request) {
                 return res.status(404).json({ success: false, message: 'Request not found' });
@@ -112,7 +112,7 @@ exports.timeOffController = {
             await server_1.prisma.employees.update({
                 where: { id: request.employee_id },
                 data: {
-                    vacation_days_used: request.employee.vacation_days_used + daysRequested
+                    vacation_days_used: request.employees.vacation_days_used + daysRequested
                 }
             });
             const updated = await server_1.prisma.time_off_requests.update({

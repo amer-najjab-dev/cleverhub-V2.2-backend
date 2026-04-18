@@ -7,7 +7,7 @@ export const guardController = {
     try {
       const periods = await prisma.guard_schedules.findMany({
         include: {
-          shift: true
+          shifts: true
         },
         orderBy: { start_date: 'asc' }
       });
@@ -16,7 +16,7 @@ export const guardController = {
       const formatted = periods.map(p => ({
         id: p.id,
         shift_id: p.shift_id,
-        shift_name: p.shift?.name,
+        shift_name: p.shifts?.name,
         start_date: p.start_date,
         end_date: p.end_date,
         created_at: p.created_at,

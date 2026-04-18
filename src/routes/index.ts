@@ -120,7 +120,7 @@ router.get('/api/admin/logs', requireRole(['SUPER_ADMIN']), async (req, res) => 
     const { prisma } = await import('../server');
     const logs = await prisma.adminLog.findMany({
       include: {
-        admin: {
+        users: {
           select: { id: true, email: true, full_name: true }
         }
       },

@@ -19,7 +19,7 @@ exports.inventoryController = {
             const inventory = await server_1.prisma.inventory_lots.findMany({
                 where: pharmacyFilter,
                 include: {
-                    product: true
+                    products: true
                 },
                 orderBy: { expiry_date: 'asc' },
                 skip: skip,
@@ -52,7 +52,7 @@ exports.inventoryController = {
             const lots = await server_1.prisma.inventory_lots.findMany({
                 where,
                 include: {
-                    product: true,
+                    products: true,
                     stock_movements: {
                         take: 5,
                         orderBy: { created_at: 'desc' }
@@ -110,13 +110,13 @@ exports.inventoryController = {
             const inventoryValue = await server_1.prisma.inventory_lots.findMany({
                 where: pharmacyFilter,
                 include: {
-                    product: {
+                    products: {
                         select: { pricePPH: true }
                     }
                 }
             });
             const totalValue = inventoryValue.reduce((sum, lot) => {
-                const price = Number(lot.product?.pricePPH ?? 0);
+                const price = Number(lot.products?.pricePPH ?? 0);
                 return sum + (lot.quantity * price);
             }, 0);
             res.json({
@@ -259,14 +259,14 @@ exports.inventoryController = {
                     ...pharmacyFilter,
                     quantity: { lt: 10 }
                 },
-                include: { product: true }
+                include: { products: true }
             });
             const expiring = await server_1.prisma.inventory_lots.findMany({
                 where: {
                     ...pharmacyFilter,
                     expiry_date: { lte: thirtyDaysFromNow }
                 },
-                include: { product: true }
+                include: { products: true }
             });
             res.json({
                 success: true,
