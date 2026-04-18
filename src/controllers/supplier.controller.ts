@@ -78,12 +78,12 @@ export class SupplierController {
       const supplier = await tx.suppliers.create({
         data: {
           company_name: company_name,
-          pharmacy_id: pharmacyId,
+          pharmacy_id: pharmacyId as any,
           email: email,
           payment_terms: req.body.payment_terms,
           tax_id: req.body.tax_id,  
           notes: notes,
-        }
+        } as any
       });
       
       if (phone) {
@@ -93,7 +93,7 @@ export class SupplierController {
             number: phone,
             type: 'order',
             is_primary: true,
-          }
+          } as any
         });
       }
       
@@ -106,7 +106,7 @@ export class SupplierController {
             postal_code: postalCode,
             country: 'Maroc',
             is_primary: true,
-          }
+          } as any
         });
       }
       

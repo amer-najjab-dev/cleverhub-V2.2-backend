@@ -52,7 +52,7 @@ export class LoyaltyService {
       include: {
         sale_items: {
           include: {
-            product: true,
+            products: true,
           },
         },
       },
@@ -161,10 +161,10 @@ export class LoyaltyService {
       include: {
         sale_items: {
           include: {
-            product: true,
+            products: true,
           },
         },
-        client: true,
+        clients: true,
       },
       orderBy: { created_at: 'desc' },
     });

@@ -38,7 +38,7 @@ export class HybridPredictorService {
     const realSales = await prisma.sale_items.findMany({
       where: {
         product_id: productId,
-        sale: {
+        sales: {
           created_at: {
             gte: thirtyDaysAgo,
           },

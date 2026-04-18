@@ -9,9 +9,9 @@ const router = Router();
 router.use(requireRole(['SUPER_ADMIN']));
 
 // Gestión de suscripciones
-router.get('/subscriptions', superAdminController.getSubscriptions);
-router.get('/subscriptions/:pharmacyId', superAdminController.getPharmacySubscription);
-router.post('/subscriptions', superAdminController.createSubscription);
+router.get('/subscriptions', superAdminController.getsubscriptions);
+router.get('/subscriptions/:pharmacyId', superAdminController.getPharmacysubscription);
+router.post('/subscriptions', superAdminController.createsubscription);
 router.post('/subscriptions/renew', superAdminController.renewLicense);
 router.post('/subscriptions/extend-courtesy', superAdminController.extendCourtesy);
 

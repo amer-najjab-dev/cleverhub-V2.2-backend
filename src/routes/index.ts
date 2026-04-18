@@ -99,8 +99,8 @@ router.put('/api/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.
 router.delete('/api/admin/users/:id', requireRole(['SUPER_ADMIN']), userController.deleteUser);
 
 // Suscripciones
-router.get('/api/admin/subscriptions', requireRole(['SUPER_ADMIN']), superAdminController.getSubscriptions);
-router.post('/api/admin/subscriptions', requireRole(['SUPER_ADMIN']), superAdminController.createSubscription);
+router.get('/api/admin/subscriptions', requireRole(['SUPER_ADMIN']), superAdminController.getsubscriptions);
+router.post('/api/admin/subscriptions', requireRole(['SUPER_ADMIN']), superAdminController.createsubscription);
 router.post('/api/admin/subscriptions/extend-courtesy', requireRole(['SUPER_ADMIN']), superAdminController.extendCourtesy);
 router.post('/api/admin/subscriptions/renew', requireRole(['SUPER_ADMIN']), superAdminController.renewLicense);
 

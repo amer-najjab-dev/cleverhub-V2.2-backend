@@ -353,17 +353,16 @@ export const stockController = {
               sku: true
             }
           },
-          lot: {
+          inventory_lots: {
             select: {
               batch_number: true,
               expiry_date: true
             }
           },
-          user: {
+          users: {
             select: {
               id: true,
-              full_name: true,
-              email: true
+              full_name: true
             }
           }
         },

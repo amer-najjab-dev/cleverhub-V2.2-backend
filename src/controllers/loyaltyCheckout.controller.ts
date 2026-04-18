@@ -38,7 +38,7 @@ export class LoyaltyCheckoutController {
           ],
         },
         include: {
-          product: true,
+          products: true,
         },
         orderBy: {
           points_cost: 'asc',
@@ -119,9 +119,9 @@ export class LoyaltyCheckoutController {
           ],
         },
         include: {
-          products: {
+          loyalty_pack_products: {
             include: {
-              product: true,
+              products: true,  // 'products' es el nombre de la relación en loyalty_pack_products
             },
           },
         },
@@ -191,7 +191,7 @@ export class LoyaltyCheckoutController {
       }
 
       const hasEnoughPoints = (client.loyalty_points || 0) >= reward.points_cost;
-      const hasStock = (reward.product?.stock || 0) > 0;
+      const hasStock = (reward.products?.stock || 0) > 0;
       const isActive = reward.is_active;
 
       const errors: string[] = [];
@@ -232,8 +232,8 @@ export class LoyaltyCheckoutController {
         prisma.loyalty_packs.findUnique({
           where: { id: parseInt(packId) },
           include: {
-            products: {
-              include: { product: true },
+            loyalty_pack_products: {
+              include: { products: true },
             },
           },
         }),
@@ -254,7 +254,7 @@ export class LoyaltyCheckoutController {
       }
 
       const hasEnoughPoints = (client.loyalty_points || 0) >= pack.points_cost;
-      const hasStock = pack.products.every((p: any) => p.product.stock > 0);
+      const hasStock = pack.loyalty_pack_products.every((lp: any) => lp.products.stock > 0);
       const isActive = pack.is_active;
 
       const errors: string[] = [];
@@ -272,9 +272,9 @@ export class LoyaltyCheckoutController {
           hasStock,
           isActive,
           errors,
-          products: pack.products.map((p: any) => ({
-            name: p.product.name,
-            hasStock: p.product.stock > 0,
+          products: pack.loyalty_pack_products.map((lp: any) => ({
+            name: lp.products.name,
+            hasStock: lp.products.stock > 0,
           })),
         },
       });
@@ -299,10 +299,10 @@ export class LoyaltyCheckoutController {
           type: 'redeemed',
         },
         include: {
-          reward: {
-            include: { product: true },
+          loyalty_rewards: {
+            include: { products: true },
           },
-          pack: true,
+          loyalty_packs: true,
         },
         orderBy: {
           created_at: 'desc',

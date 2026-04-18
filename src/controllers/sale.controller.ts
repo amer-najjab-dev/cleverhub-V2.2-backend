@@ -240,7 +240,7 @@ export class VentaController {
         include: {
           sale_items: true,
           clients: true,
-          user: true,
+          users: true,
           payments: true
         }
       });
@@ -333,7 +333,7 @@ export class VentaController {
             }
           },
           clients: true,
-          user: true,
+          users: true,
           payments: true
         }
       });
@@ -393,7 +393,7 @@ export class VentaController {
         where,
         include: {
           clients: true,
-          user: true,
+          users: true,
           sale_items: {
             include: {
               products: true
@@ -459,7 +459,7 @@ export class VentaController {
         },
         include: {
           clients: true,
-          user: true,
+          users: true,
           sale_items: true,
           payments: true
         },

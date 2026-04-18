@@ -156,7 +156,7 @@ export class SuperAdminController {
         where: { pharmacy_id: parseInt(pharmacyId) },
         include: {
           pharmacy: true,
-          payments: { orderBy: { created_at: 'desc' } }
+          PaymentLog: { orderBy: { created_at: 'desc' } }
         }
       });
       
@@ -452,7 +452,7 @@ ${newEndDate.toLocaleDateString()}`,
       
       const allPharmacies = await prisma.pharmacy.findMany({
         include: {
-          subscription: true,
+          Subscription: true,
           _count: {
             select: { sales: true }
           }
@@ -487,7 +487,7 @@ ${newEndDate.toLocaleDateString()}`,
             license: pharmacy.license,
             status: expiringSoon ? 'EXPIRING_SOON' : 'NO_RECENT_SALES',
             subscription_end: subscription?.end_date,
-            total_sales: pharmacy._count.sales
+            total_sales: (pharmacy as any)._count?.sales || 0
           });
         } else {
           status.green.push({
@@ -496,7 +496,7 @@ ${newEndDate.toLocaleDateString()}`,
             license: pharmacy.license,
             status: 'ACTIVE',
             subscription_end: subscription?.end_date,
-            total_sales: pharmacy._count.sales
+            total_sales: (pharmacy as any)._count?.sales || 0
           });
         }
       }
