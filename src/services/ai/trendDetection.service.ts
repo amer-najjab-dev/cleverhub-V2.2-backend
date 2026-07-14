@@ -39,7 +39,7 @@ export class TrendDetectionService {
     }>();
 
     sales.forEach((sales: any) => {
-      const lab = sale.product?.laboratory;
+      const lab = sales.product?.laboratory;
       if (!lab || lab === 'NON RENSEIGNÉ') return;
 
       if (!labMap.has(lab)) {
@@ -51,9 +51,9 @@ export class TrendDetectionService {
       }
 
       const labData = labMap.get(lab)!;
-      labData.products.add(sale.product_id);
-      labData.productNames.add(sale.product?.name || 'Unknown');
-      labData.count += sale.quantity;
+      labData.products.add(sales.product_id);
+      labData.productNames.add(sales.product?.name || 'Unknown');
+      labData.count += sales.quantity;
     });
 
     const trends: EmergingTrend[] = [];
@@ -83,7 +83,7 @@ export class TrendDetectionService {
       }
     });
 
-    return trends.sort((a, b) => b.salessCount - a.salessCount);
+    return trends.sort((a, b) => b.salesCount - a.salesCount);
   }
 
   async getWeeklyTrends(): Promise<EmergingTrend[]> {
