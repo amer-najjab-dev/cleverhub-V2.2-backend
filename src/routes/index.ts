@@ -206,8 +206,8 @@ router.use('/api/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 router.use('/users', requireRole(['ADMIN', 'SUPER_ADMIN']), userRoutes);
 
 // Campañas
-router.use('/api/campaigns', requireRole(['ADMIN', 'EMPLOYEE']), campaignRoutes);
-router.use('/campaigns', requireRole(['ADMIN', 'EMPLOYEE']), campaignRoutes);
+//router.use('/api/campaigns', requireRole(['ADMIN', 'EMPLOYEE']), campaignRoutes);
+//router.use('/campaigns', requireRole(['ADMIN', 'EMPLOYEE']), campaignRoutes);
 
 // IA
 router.use('/api/ai/products', requireRole(['ADMIN', 'EMPLOYEE']), productIntelligenceRoutes);
