@@ -1,27 +1,15 @@
 import { Request, Response } from 'express';
-//import { reportService } from '../services/report/report.service';
+// import { reportService } from '../services/report/report.service'; // Comentado porque el archivo fue movido
 import { supplierAnalysisService } from '../services/report/supplierAnalysis.service';
 
 export class ReportController {
   
-  // ========== CIERRE DE CAJA ==========
+  // ========== CIERRE DE CAJA (TEMPORALMENTE DESHABILITADO) ==========
   async getCashClosure(req: Request, res: Response) {
     try {
-      const { date } = req.query;
-      const userId = req.session.userId;
-      
-      if (!date) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Date requise' 
-        });
-      }
-
-      const closure = await reportService.getCashClosure(date as string, userId!);
-      
-      res.json({
-        success: true,
-        data: closure
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Servicio temporalmente deshabilitado. Contacte con soporte.' 
       });
     } catch (error: any) {
       console.error('Error getting cash closure:', error);
@@ -34,10 +22,9 @@ export class ReportController {
 
   async validateClosure(req: Request, res: Response) {
     try {
-      const result = await reportService.validateClosure(req.body);
-      res.json({
-        success: true,
-        data: result
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Servicio temporalmente deshabilitado. Contacte con soporte.' 
       });
     } catch (error: any) {
       res.status(500).json({ 
@@ -49,10 +36,9 @@ export class ReportController {
 
   async resolveDiscrepancy(req: Request, res: Response) {
     try {
-      const result = await reportService.resolveDiscrepancy(req.body);
-      res.json({
-        success: true,
-        data: result
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Servicio temporalmente deshabilitado. Contacte con soporte.' 
       });
     } catch (error: any) {
       res.status(500).json({ 
@@ -62,14 +48,12 @@ export class ReportController {
     }
   }
 
-  // ========== BUSINESS INTELLIGENCE ==========
+  // ========== BUSINESS INTELLIGENCE (TEMPORALMENTE DESHABILITADO) ==========
   async getDashboardKPIs(req: Request, res: Response) {
     try {
-      const { period } = req.query;
-      const kpis = await reportService.getDashboardKPIs(period as string);
-      res.json({
-        success: true,
-        data: kpis
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Servicio temporalmente deshabilitado. Contacte con soporte.' 
       });
     } catch (error: any) {
       res.status(500).json({ 
@@ -81,11 +65,9 @@ export class ReportController {
 
   async getSalesTrend(req: Request, res: Response) {
     try {
-      const { period } = req.query;
-      const data = await reportService.getSalesTrend(period as string);
-      res.json({
-        success: true,
-        data
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Servicio temporalmente deshabilitado. Contacte con soporte.' 
       });
     } catch (error: any) {
       res.status(500).json({ 
@@ -97,14 +79,9 @@ export class ReportController {
 
   async getTopProducts(req: Request, res: Response) {
     try {
-      const { limit, period } = req.query;
-      const data = await reportService.getTopProducts(
-        limit ? parseInt(limit as string) : 10, 
-        period as string
-      );
-      res.json({
-        success: true,
-        data
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Servicio temporalmente deshabilitado. Contacte con soporte.' 
       });
     } catch (error: any) {
       res.status(500).json({ 
@@ -116,11 +93,9 @@ export class ReportController {
 
   async getLostSales(req: Request, res: Response) {
     try {
-      const { period } = req.query;
-      const data = await reportService.getLostSales(period as string);
-      res.json({
-        success: true,
-        data
+      return res.status(503).json({ 
+        success: false, 
+        message: 'Servicio temporalmente deshabilitado. Contacte con soporte.' 
       });
     } catch (error: any) {
       res.status(500).json({ 
@@ -130,7 +105,7 @@ export class ReportController {
     }
   }
 
-  // ========== ANÁLISIS DE PROVEEDORES ==========
+  // ========== ANÁLISIS DE PROVEEDORES (ACTIVO) ==========
   async getSupplierAnalysis(req: Request, res: Response) {
     try {
       const { startDate, endDate, supplierIds } = req.query;
@@ -147,13 +122,10 @@ export class ReportController {
         endDate: endDate as string
       };
 
-      // CORREGIDO: Manejar supplierIds correctamente
       if (supplierIds) {
         if (typeof supplierIds === 'string') {
-          // Si es string (formato comma-separated)
           filters.supplierIds = supplierIds.split(',');
         } else if (Array.isArray(supplierIds)) {
-          // Si ya es un array
           filters.supplierIds = supplierIds;
         }
       }
