@@ -17,7 +17,7 @@ export class TrendDetectionService {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const sales = await prisma.sales_items.findMany({
+    const sales = await prisma.sale_items.findMany({
       where: {
         sales: {
           created_at: {

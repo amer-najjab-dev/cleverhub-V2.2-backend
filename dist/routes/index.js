@@ -117,8 +117,8 @@ router.post('/api/admin/users', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_c
 router.put('/api/admin/users/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.updateUser);
 router.delete('/api/admin/users/:id', (0, rbac_1.requireRole)(['SUPER_ADMIN']), user_controller_1.userController.deleteUser);
 // Suscripciones
-router.get('/api/admin/subscriptions', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.getSubscriptions);
-router.post('/api/admin/subscriptions', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.createSubscription);
+router.get('/api/admin/subscriptions', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.getsubscriptions);
+router.post('/api/admin/subscriptions', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.createsubscription);
 router.post('/api/admin/subscriptions/extend-courtesy', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.extendCourtesy);
 router.post('/api/admin/subscriptions/renew', (0, rbac_1.requireRole)(['SUPER_ADMIN']), superadmin_controller_1.superAdminController.renewLicense);
 // Health status

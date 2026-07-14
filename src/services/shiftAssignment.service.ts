@@ -70,7 +70,7 @@ export const shiftAssignmentService = {
       include: {
         shifts: true,
         employees: {
-          include: { user: true }
+          include: { users: true }
         }
       }
     });

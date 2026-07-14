@@ -387,7 +387,7 @@ class DashboardController {
             const topProducts = await server_1.prisma.sale_items.groupBy({
                 by: ['product_id'],
                 where: {
-                    sale: {
+                    sales: {
                         ...pharmacyFilter,
                         created_at: {
                             gte: startDate,

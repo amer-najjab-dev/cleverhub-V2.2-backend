@@ -16,7 +16,7 @@ class LoyaltyCheckoutController {
                     message: 'Client non trouvé',
                 });
             }
-            const rewards = await server_1.prisma.loyalty_reward.findMany({
+            const rewards = await server_1.prisma.loyalty_rewards.findMany({
                 where: {
                     is_active: true,
                     AND: [
@@ -35,7 +35,7 @@ class LoyaltyCheckoutController {
                     ],
                 },
                 include: {
-                    product: true,
+                    products: true,
                 },
                 orderBy: {
                     points_cost: 'asc',
@@ -91,7 +91,7 @@ class LoyaltyCheckoutController {
                     message: 'Client non trouvé',
                 });
             }
-            const packs = await server_1.prisma.loyalty_pack.findMany({
+            const packs = await server_1.prisma.loyalty_packs.findMany({
                 where: {
                     is_active: true,
                     AND: [
@@ -110,9 +110,9 @@ class LoyaltyCheckoutController {
                     ],
                 },
                 include: {
-                    products: {
+                    loyalty_pack_products: {
                         include: {
-                            product: true,
+                            products: true, // 'products' es el nombre de la relación en loyalty_pack_products
                         },
                     },
                 },
@@ -158,9 +158,9 @@ class LoyaltyCheckoutController {
                 server_1.prisma.clients.findUnique({
                     where: { id: parseInt(clientId) },
                 }),
-                server_1.prisma.loyalty_reward.findUnique({
+                server_1.prisma.loyalty_rewards.findUnique({
                     where: { id: parseInt(rewardId) },
-                    include: { product: true },
+                    include: { products: true },
                 }),
             ]);
             if (!client) {
@@ -176,7 +176,7 @@ class LoyaltyCheckoutController {
                 });
             }
             const hasEnoughPoints = (client.loyalty_points || 0) >= reward.points_cost;
-            const hasStock = (reward.product?.stock || 0) > 0;
+            const hasStock = (reward.products?.stock || 0) > 0;
             const isActive = reward.is_active;
             const errors = [];
             if (!hasEnoughPoints)
@@ -214,11 +214,11 @@ class LoyaltyCheckoutController {
                 server_1.prisma.clients.findUnique({
                     where: { id: parseInt(clientId) },
                 }),
-                server_1.prisma.loyalty_pack.findUnique({
+                server_1.prisma.loyalty_packs.findUnique({
                     where: { id: parseInt(packId) },
                     include: {
-                        products: {
-                            include: { product: true },
+                        loyalty_pack_products: {
+                            include: { products: true },
                         },
                     },
                 }),
@@ -236,7 +236,7 @@ class LoyaltyCheckoutController {
                 });
             }
             const hasEnoughPoints = (client.loyalty_points || 0) >= pack.points_cost;
-            const hasStock = pack.products.every((p) => p.product.stock > 0);
+            const hasStock = pack.loyalty_pack_products.every((lp) => lp.products.stock > 0);
             const isActive = pack.is_active;
             const errors = [];
             if (!hasEnoughPoints)
@@ -255,9 +255,9 @@ class LoyaltyCheckoutController {
                     hasStock,
                     isActive,
                     errors,
-                    products: pack.products.map((p) => ({
-                        name: p.product.name,
-                        hasStock: p.product.stock > 0,
+                    products: pack.loyalty_pack_products.map((lp) => ({
+                        name: lp.products.name,
+                        hasStock: lp.products.stock > 0,
                     })),
                 },
             });
@@ -281,10 +281,10 @@ class LoyaltyCheckoutController {
                     type: 'redeemed',
                 },
                 include: {
-                    reward: {
-                        include: { product: true },
+                    loyalty_rewards: {
+                        include: { products: true },
                     },
-                    pack: true,
+                    loyalty_packs: true,
                 },
                 orderBy: {
                     created_at: 'desc',

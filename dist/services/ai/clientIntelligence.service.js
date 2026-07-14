@@ -17,12 +17,12 @@ class ClientIntelligenceService {
         });
         const payments = await server_1.prisma.payments.findMany({
             where: {
-                sale: {
+                sales: {
                     client_id: clientId,
                 },
             },
             include: {
-                sale: true,
+                sales: true,
             },
         });
         // Calcular métricas básicas
@@ -187,7 +187,7 @@ class ClientIntelligenceService {
             include: {
                 sale_items: {
                     include: {
-                        product: true,
+                        products: true,
                     },
                 },
             },

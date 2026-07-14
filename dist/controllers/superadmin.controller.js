@@ -100,7 +100,7 @@ class SuperAdminController {
     // GESTIÓN DE SUSCRIPCIONES
     // ==========================================
     // Obtener todas las suscripciones con filtros
-    async getSubscriptions(req, res) {
+    async getsubscriptions(req, res) {
         try {
             const { status, plan, search } = req.query;
             const where = {};
@@ -122,7 +122,7 @@ class SuperAdminController {
                     pharmacy: {
                         select: { id: true, name: true, license: true, email: true, phone: true }
                     },
-                    payments: {
+                    PaymentLog: {
                         take: 1,
                         orderBy: { created_at: 'desc' }
                     }
@@ -136,14 +136,14 @@ class SuperAdminController {
         }
     }
     // Obtener suscripción de una farmacia específica
-    async getPharmacySubscription(req, res) {
+    async getPharmacysubscription(req, res) {
         try {
             const { pharmacyId } = req.params;
             const subscription = await server_1.prisma.subscription.findUnique({
                 where: { pharmacy_id: parseInt(pharmacyId) },
                 include: {
                     pharmacy: true,
-                    payments: { orderBy: { created_at: 'desc' } }
+                    PaymentLog: { orderBy: { created_at: 'desc' } }
                 }
             });
             if (!subscription) {
@@ -156,7 +156,7 @@ class SuperAdminController {
         }
     }
     // Crear o actualizar suscripción (inicial)
-    async createSubscription(req, res) {
+    async createsubscription(req, res) {
         try {
             const { pharmacy_id, plan, trial_days = 30 } = req.body;
             // Verificar que la farmacia existe
@@ -183,7 +183,9 @@ class SuperAdminController {
                     start_date: startDate,
                     end_date: endDate,
                     status: 'TRIAL',
-                    trial_end_date: endDate
+                    trial_end_date: endDate,
+                    created_at: new Date(),
+                    updated_at: new Date()
                 }
             });
             // Registrar en log
@@ -297,25 +299,25 @@ ${newEndDate.toLocaleDateString()}`,
                     pharmacies = await server_1.prisma.pharmacy.findMany({
                         where: {
                             is_active: true,
-                            subscription: { status: 'ACTIVE' }
+                            Subscription: { status: 'ACTIVE' }
                         },
-                        include: { subscription: true }
+                        include: { Subscription: true }
                     });
                     break;
                 case 'GRACE_PERIOD':
                     pharmacies = await server_1.prisma.pharmacy.findMany({
                         where: {
-                            subscription: { status: 'GRACE_PERIOD' }
+                            Subscription: { status: 'GRACE_PERIOD' }
                         },
-                        include: { subscription: true }
+                        include: { Subscription: true }
                     });
                     break;
                 case 'SUSPENDED':
                     pharmacies = await server_1.prisma.pharmacy.findMany({
                         where: {
-                            subscription: { status: 'SUSPENDED' }
+                            Subscription: { status: 'SUSPENDED' }
                         },
-                        include: { subscription: true }
+                        include: { Subscription: true }
                     });
                     break;
                 case 'SPECIFIC_PHARMACY':
@@ -383,7 +385,7 @@ ${newEndDate.toLocaleDateString()}`,
             const days10 = (0, date_fns_1.addDays)(today, 10);
             const allPharmacies = await server_1.prisma.pharmacy.findMany({
                 include: {
-                    subscription: true,
+                    Subscription: true,
                     _count: {
                         select: { sales: true }
                     }
@@ -396,10 +398,10 @@ ${newEndDate.toLocaleDateString()}`,
             };
             for (const pharmacy of allPharmacies) {
                 const subscription = pharmacy.subscription;
-                const hasRecentSales = pharmacy._count.sales > 0;
+                const hasRecentSales = pharmacy._count?.sales > 0;
                 const expiringSoon = subscription?.end_date && (0, date_fns_1.isBefore)(subscription.end_date, days10);
                 const isSuspended = subscription?.status === 'SUSPENDED';
-                if (isSuspended || (!hasRecentSales && pharmacy._count.sales === 0)) {
+                if (isSuspended || (!hasRecentSales && pharmacy._count?.sales === 0)) {
                     status.red.push({
                         id: pharmacy.id,
                         name: pharmacy.name,
@@ -416,7 +418,7 @@ ${newEndDate.toLocaleDateString()}`,
                         license: pharmacy.license,
                         status: expiringSoon ? 'EXPIRING_SOON' : 'NO_RECENT_SALES',
                         subscription_end: subscription?.end_date,
-                        total_sales: pharmacy._count.sales
+                        total_sales: pharmacy._count?.sales || 0
                     });
                 }
                 else {
@@ -426,7 +428,7 @@ ${newEndDate.toLocaleDateString()}`,
                         license: pharmacy.license,
                         status: 'ACTIVE',
                         subscription_end: subscription?.end_date,
-                        total_sales: pharmacy._count.sales
+                        total_sales: pharmacy._count?.sales || 0
                     });
                 }
             }

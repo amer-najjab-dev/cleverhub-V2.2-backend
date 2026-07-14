@@ -11,7 +11,7 @@ exports.deliveryService = {
             return { ...item, subtotal };
         });
         const result = await server_1.prisma.$transaction(async (tx) => {
-            const deliveryNote = await tx.delivery_note.create({
+            const deliveryNote = await tx.delivery_notes.create({
                 data: {
                     note_number: data.note_number,
                     supplier_id: data.supplier_id,
@@ -55,7 +55,7 @@ exports.deliveryService = {
             if (!data.due_date) {
                 dueDate.setDate(dueDate.getDate() + 30);
             }
-            const obligation = await tx.payment_obligation.create({
+            const obligation = await tx.payment_obligations.create({
                 data: {
                     delivery_note_id: deliveryNote.id,
                     supplier_id: data.supplier_id,
@@ -73,7 +73,7 @@ exports.deliveryService = {
     },
     async registerObligationPayment(data) {
         const result = await server_1.prisma.$transaction(async (tx) => {
-            const payment = await tx.obligation_payment.create({
+            const payment = await tx.obligation_payments.create({
                 data: {
                     obligation_id: data.obligation_id,
                     amount: data.amount,
@@ -82,7 +82,7 @@ exports.deliveryService = {
                     notes: data.notes
                 }
             });
-            const obligation = await tx.payment_obligation.findUnique({
+            const obligation = await tx.payment_obligations.findUnique({
                 where: { id: data.obligation_id }
             });
             if (!obligation)
@@ -90,7 +90,7 @@ exports.deliveryService = {
             const newPaidAmount = Number(obligation.paid_amount) + data.amount;
             const newPendingAmount = Number(obligation.total_amount) - newPaidAmount;
             const newStatus = newPendingAmount <= 0 ? 'paid' : newPaidAmount > 0 ? 'partial' : 'pending';
-            const updatedObligation = await tx.payment_obligation.update({
+            const updatedObligation = await tx.payment_obligations.update({
                 where: { id: data.obligation_id },
                 data: {
                     paid_amount: newPaidAmount,
@@ -99,7 +99,7 @@ exports.deliveryService = {
                 }
             });
             if (newStatus === 'paid') {
-                await tx.delivery_note.update({
+                await tx.delivery_notes.update({
                     where: { id: obligation.delivery_note_id },
                     data: {
                         payment_status: 'paid',
@@ -110,7 +110,7 @@ exports.deliveryService = {
                 });
             }
             else if (newPaidAmount > 0) {
-                await tx.delivery_note.update({
+                await tx.delivery_notes.update({
                     where: { id: obligation.delivery_note_id },
                     data: {
                         payment_status: 'partial',
@@ -123,22 +123,22 @@ exports.deliveryService = {
         return result;
     },
     async getSupplierObligations(supplierId) {
-        return await server_1.prisma.payment_obligation.findMany({
+        return await server_1.prisma.payment_obligations.findMany({
             where: { supplier_id: supplierId },
             include: {
-                delivery_note: {
+                delivery_notes: {
                     select: {
                         note_number: true,
                         reception_date: true,
-                        items: {
+                        delivery_note_items: {
                             select: {
                                 quantity: true,
-                                product: { select: { name: true } }
+                                products: { select: { name: true } }
                             }
                         }
                     }
                 },
-                payments: true
+                obligation_payments: true
             },
             orderBy: { due_date: 'asc' }
         });

@@ -196,8 +196,8 @@ class VentaController {
                 },
                 include: {
                     sale_items: true,
-                    client: true,
-                    user: true,
+                    clients: true,
+                    users: true,
                     payments: true
                 }
             });
@@ -205,7 +205,7 @@ class VentaController {
             if (debtsToCreate.length > 0) {
                 for (const debt of debtsToCreate) {
                     // Siempre crear una nueva deuda, no consolidar
-                    await server_1.prisma.client_debt.create({
+                    await server_1.prisma.client_debts.create({
                         data: {
                             client_id: debt.client_id,
                             total_debt: debt.total_debt,
@@ -277,11 +277,11 @@ class VentaController {
                 include: {
                     sale_items: {
                         include: {
-                            product: true
+                            products: true
                         }
                     },
-                    client: true,
-                    user: true,
+                    clients: true,
+                    users: true,
                     payments: true
                 }
             });
@@ -325,11 +325,11 @@ class VentaController {
             const ventas = await server_1.prisma.sales.findMany({
                 where,
                 include: {
-                    client: true,
-                    user: true,
+                    clients: true,
+                    users: true,
                     sale_items: {
                         include: {
-                            product: true
+                            products: true
                         }
                     },
                     payments: true
@@ -386,8 +386,8 @@ class VentaController {
                     }
                 },
                 include: {
-                    client: true,
-                    user: true,
+                    clients: true,
+                    users: true,
                     sale_items: true,
                     payments: true
                 },
@@ -441,10 +441,10 @@ class VentaController {
                     }
                 },
                 include: {
-                    client: true,
+                    clients: true,
                     sale_items: {
                         include: {
-                            product: true
+                            products: true
                         }
                     }
                 },

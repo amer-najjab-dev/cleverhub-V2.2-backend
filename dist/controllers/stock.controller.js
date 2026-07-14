@@ -44,7 +44,7 @@ exports.stockController = {
             const lots = await server_1.prisma.inventory_lots.findMany({
                 where: lotWhere,
                 include: {
-                    product: {
+                    products: {
                         select: {
                             id: true,
                             name: true,
@@ -68,7 +68,7 @@ exports.stockController = {
                 const productId = lot.product_id;
                 if (!acc[productId]) {
                     acc[productId] = {
-                        product: lot.product,
+                        products: lot.products,
                         total_quantity: 0,
                         lots: []
                     };
@@ -118,7 +118,7 @@ exports.stockController = {
                     expiry_date: { gt: new Date() }
                 },
                 include: {
-                    product: {
+                    products: {
                         select: {
                             id: true,
                             name: true,
@@ -136,7 +136,7 @@ exports.stockController = {
                 const productId = lot.product_id;
                 if (!acc[productId]) {
                     acc[productId] = {
-                        product: lot.product,
+                        products: lot.products,
                         total_quantity: 0,
                         lots: []
                     };
@@ -204,13 +204,13 @@ exports.stockController = {
             const lotsWithProducts = await server_1.prisma.inventory_lots.findMany({
                 where: pharmacyFilter,
                 include: {
-                    product: {
+                    products: {
                         select: { pricePPH: true }
                     }
                 }
             });
             const totalValue = lotsWithProducts.reduce((sum, lot) => {
-                return sum + (lot.quantity * Number(lot.product?.pricePPH || 0));
+                return sum + (lot.quantity * Number(lot.products?.pricePPH || 0));
             }, 0);
             res.json({
                 success: true,
@@ -246,7 +246,7 @@ exports.stockController = {
                     quantity: { gt: 0 }
                 },
                 include: {
-                    product: {
+                    products: {
                         select: {
                             id: true,
                             name: true,
@@ -264,7 +264,7 @@ exports.stockController = {
                 const productId = lot.product_id;
                 if (!acc[productId]) {
                     acc[productId] = {
-                        product: lot.product,
+                        products: lot.products,
                         total_quantity: 0,
                         lots: []
                     };
@@ -306,24 +306,23 @@ exports.stockController = {
             const movements = await server_1.prisma.stock_movements.findMany({
                 where,
                 include: {
-                    product: {
+                    products: {
                         select: {
                             id: true,
                             name: true,
                             sku: true
                         }
                     },
-                    lot: {
+                    inventory_lots: {
                         select: {
                             batch_number: true,
                             expiry_date: true
                         }
                     },
-                    user: {
+                    users: {
                         select: {
                             id: true,
-                            full_name: true,
-                            email: true
+                            full_name: true
                         }
                     }
                 },

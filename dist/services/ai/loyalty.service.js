@@ -21,7 +21,7 @@ class LoyaltyService {
             include: {
                 sale_items: {
                     include: {
-                        product: true,
+                        products: true,
                     },
                 },
             },
@@ -118,10 +118,10 @@ class LoyaltyService {
             include: {
                 sale_items: {
                     include: {
-                        product: true,
+                        products: true,
                     },
                 },
-                client: true,
+                clients: true,
             },
             orderBy: { created_at: 'desc' },
         });

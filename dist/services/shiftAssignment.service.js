@@ -53,15 +53,15 @@ exports.shiftAssignmentService = {
         const end = normalizeToUTC(endDateStr);
         const assignments = await server_1.prisma.shift_assignments.findMany({
             where: {
-                employee: { pharmacy_id: pharmacyId },
+                employees: { pharmacy_id: pharmacyId },
                 date: {
                     gte: start,
                     lte: end
                 }
             },
             include: {
-                shift: true,
-                employee: {
+                shifts: true,
+                employees: {
                     include: { user: true }
                 }
             }

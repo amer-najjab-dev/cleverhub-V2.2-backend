@@ -7,9 +7,9 @@ class TrendDetectionService {
         const endDate = new Date();
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
-        const sales = await server_1.prisma.sale_items.findMany({
+        const sales = await server_1.prisma.sales_items.findMany({
             where: {
-                sale: {
+                sales: {
                     created_at: {
                         gte: startDate,
                         lte: endDate,
@@ -17,12 +17,12 @@ class TrendDetectionService {
                 },
             },
             include: {
-                product: true,
-                sale: true,
+                products: true,
+                sales: true,
             },
         });
         const labMap = new Map();
-        sales.forEach((sale) => {
+        sales.forEach((sales) => {
             const lab = sale.product?.laboratory;
             if (!lab || lab === 'NON RENSEIGNÉ')
                 return;
@@ -62,7 +62,7 @@ class TrendDetectionService {
                 });
             }
         });
-        return trends.sort((a, b) => b.salesCount - a.salesCount);
+        return trends.sort((a, b) => b.salessCount - a.salessCount);
     }
     async getWeeklyTrends() {
         return this.detectEmergingTrends(7);
