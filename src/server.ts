@@ -49,45 +49,20 @@ const PORT = process.env.PORT || 5001;
 app.set('trust proxy', 1); // Render usa proxies
 
 // ==========================================
-// 2. CONFIGURACIÓN DE CORS (VERCEL)
+// 2. CONFIGURACIÓN DE CORS (SIMPLIFICADA)
 // ==========================================
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:3000',
-  process.env.FRONTEND_URL || 'https://cleverhub-v2-frontend.vercel.app',
-  'https://cleverhub-v2-2-frontend.vercel.app', // ← Añadir esta línea
-  // Expresión regular para aceptar cualquier preview de Vercel
-  /^https:\/\/cleverhub-v2-frontend-git-[a-zA-Z0-9-]+\.vercel\.app$/,
-  /^https:\/\/cleverhub-v2-frontend-.*\.vercel\.app$/,
-  /^https:\/\/cleverhub-v2-2-frontend-.*\.vercel\.app$/, // ← Añadir esta línea también
-  // Railway app domains
+  'https://cleverhub-v2-frontend.vercel.app',
+  'https://cleverhub-v2-2-frontend.vercel.app',
   /\.up\.railway\.app$/
 ];
 
+// CORS simplificado - permite todos los orígenes (solo para diagnóstico)
 app.use(cors({
-  origin: (origin, callback) => {
-    // Permitir requests sin origin (Postman, apps móviles)
-    if (!origin) return callback(null, true);
-    
-    // Verificar si el origen coincide con algún patrón (string o regex)
-    const allowed = allowedOrigins.some(allowedOrigin => {
-      if (typeof allowedOrigin === 'string') {
-        return origin === allowedOrigin;
-      }
-      if (allowedOrigin instanceof RegExp) {
-        return allowedOrigin.test(origin);
-      }
-      return false;
-    });
-    
-    if (allowed) {
-      callback(null, true);
-    } else {
-      console.warn('🚫 Origen bloqueado por CORS:', origin);
-      callback(new Error('No autorizado por CORS'));
-    }
-  },
+  origin: true,
   credentials: true,
   optionsSuccessStatus: 200
 }));
@@ -163,15 +138,8 @@ app.get('/', (req, res) => {
 app.post('/api/auth/login', authController.login);
 app.post('/api/auth/logout', authController.logout);
 app.get('/api/admin/cron/check-expirations', superAdminController.runExpirationCheck);
-// app.post('/api/auth/register', authController.register); // Si existe
-// app.post('/api/auth/forgot-password', authController.forgotPassword); // TODO: Implementar
-// app.post('/api/auth/reset-password', authController.resetPassword); // TODO: Implementar
 
 // Ruta para obtener usuario actual (requiere autenticación)
-// TODO: Implementar getMe en authController
-// app.get('/api/auth/me', requireAuth, authController.getMe);
-
-// Ruta temporal para obtener usuario actual (alternativa)
 app.get('/api/auth/me', requireAuth, async (req: any, res) => {
   try {
     const userId = req.user?.id;
@@ -228,7 +196,6 @@ console.log('🔄 Cargando rutas autenticadas...');
 import routes from './routes';
 
 // Aplicar middleware de autenticación a todas las rutas bajo /api
-// El middleware addPharmacyFilter añade el filtro de farmacia automáticamente
 app.use(requireAuth, addPharmacyFilter, routes);
 
 // ==========================================
@@ -297,7 +264,6 @@ async function startServer() {
     const userCount = await prisma.users.count();
     console.log(`📊 Usuarios en BD: ${userCount}`);
     
-    // Verificar si hay farmacias
     const pharmacyCount = await prisma.pharmacy.count();
     console.log(`📊 Farmacias en BD: ${pharmacyCount}`);
 
