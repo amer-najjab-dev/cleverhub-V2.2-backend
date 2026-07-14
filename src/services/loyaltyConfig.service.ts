@@ -133,7 +133,7 @@ export class LoyaltyConfigService {
     
     const recentActivity = await prisma.loyalty_transactions.count({
       where: {
-        client: { pharmacy_id: pharmacyId },
+        clients: { pharmacy_id: pharmacyId },
         created_at: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
       }
     });

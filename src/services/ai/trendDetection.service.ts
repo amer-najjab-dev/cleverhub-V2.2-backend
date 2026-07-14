@@ -17,7 +17,7 @@ export class TrendDetectionService {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    const sales = await prisma.sale_items.findMany({
+    const sales = await prisma.sales_items.findMany({
       where: {
         sales: {
           created_at: {
@@ -28,7 +28,7 @@ export class TrendDetectionService {
       },
       include: {
         products: true,
-        sale: true,
+        sales: true,
       },
     });
 
@@ -38,7 +38,7 @@ export class TrendDetectionService {
       count: number;
     }>();
 
-    sales.forEach((sale: any) => {
+    sales.forEach((sales: any) => {
       const lab = sale.product?.laboratory;
       if (!lab || lab === 'NON RENSEIGNÉ') return;
 
@@ -83,7 +83,7 @@ export class TrendDetectionService {
       }
     });
 
-    return trends.sort((a, b) => b.salesCount - a.salesCount);
+    return trends.sort((a, b) => b.salessCount - a.salessCount);
   }
 
   async getWeeklyTrends(): Promise<EmergingTrend[]> {
