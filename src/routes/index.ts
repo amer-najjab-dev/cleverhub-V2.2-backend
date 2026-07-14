@@ -32,7 +32,7 @@ import loyaltyRoutes from './ai/loyalty.routes';
 import loyaltyRewardRoutes from './loyaltyReward.routes';
 import loyaltyCheckoutRoutes from './loyaltyCheckout.routes';
 import loyaltyConfigRoutes from './loyaltyConfig.routes';
-import campaignRoutes from './campaign.routes';
+//import campaignRoutes from './campaign.routes';
 
 // Importaciones de rutas adicionales
 import stockRoutes from './stock.routes';
