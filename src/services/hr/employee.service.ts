@@ -6,7 +6,7 @@ export const employeeService = {
     return await prisma.employees.findMany({
       where: { pharmacy_id: pharmacyId },
       include: {
-        user: {
+        users: {
           select: { id: true, full_name: true, email: true }
         }
       }
@@ -34,7 +34,7 @@ export const employeeService = {
         role: 'EMPLOYEE',
         pharmacy_id: pharmacyId,
         is_active: true
-      }
+      } as any
     });
 
     const employee = await prisma.employees.create({
@@ -51,7 +51,7 @@ export const employeeService = {
         vacation_days_used: 0,
         updated_at: new Date()
       },
-      include: { user: true }
+      include: { users: true }
     });
 
     return employee;

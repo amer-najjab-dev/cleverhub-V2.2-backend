@@ -447,10 +447,10 @@ export class DashboardController {
         }
       }
 
-      const topProducts = await prisma.sale_items.groupBy({
+      const topProducts = await (prisma.sale_items.groupBy as any)({
         by: ['product_id'],
         where: {
-          sale: {
+          sales: {
             ...pharmacyFilter,
             created_at: { 
               gte: startDate,
@@ -628,7 +628,7 @@ export class DashboardController {
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       
-      const topProductData = await prisma.sale_items.groupBy({
+      const topProductData = await (prisma.sale_items.groupBy as any) ({
         by: ['product_id'],
         where: {
           sale: {

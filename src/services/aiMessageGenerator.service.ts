@@ -131,7 +131,7 @@ export class AIMessageGeneratorService {
         },
       },
       include: {
-        product: true,
+        products: true,
       },
       orderBy: {
         like_count: 'desc',

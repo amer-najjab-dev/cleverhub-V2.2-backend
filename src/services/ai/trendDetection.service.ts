@@ -19,7 +19,7 @@ export class TrendDetectionService {
 
     const sales = await prisma.sale_items.findMany({
       where: {
-        sale: {
+        sales: {
           created_at: {
             gte: startDate,
             lte: endDate,
@@ -27,7 +27,7 @@ export class TrendDetectionService {
         },
       },
       include: {
-        product: true,
+        products: true,
         sale: true,
       },
     });

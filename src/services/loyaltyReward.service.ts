@@ -10,10 +10,10 @@ export class LoyaltyRewardService {
       where.is_active = true;
     }
 
-    const rewards = await prisma.loyalty_reward.findMany({
+    const rewards = await prisma.loyalty_rewards.findMany({
       where,
       include: {
-        product: true,
+        products: true,
       },
       orderBy: {
         points_cost: 'asc',
@@ -37,7 +37,7 @@ export class LoyaltyRewardService {
   }
 
   async createReward(data: any) {
-    const reward = await prisma.loyalty_reward.create({
+    const reward = await prisma.loyalty_rewards.create({
       data: {
         product_id: data.productId,
         points_cost: data.pointsCost,
@@ -49,7 +49,7 @@ export class LoyaltyRewardService {
         end_date: data.endDate,
       },
       include: {
-        product: true,
+        products: true,
       },
     });
 
@@ -57,7 +57,7 @@ export class LoyaltyRewardService {
   }
 
   async updateReward(id: number, data: any) {
-    const reward = await prisma.loyalty_reward.update({
+    const reward = await prisma.loyalty_rewards.update({
       where: { id },
       data: {
         product_id: data.productId,
@@ -70,7 +70,7 @@ export class LoyaltyRewardService {
         end_date: data.endDate,
       },
       include: {
-        product: true,
+        products: true,
       },
     });
 
@@ -78,7 +78,7 @@ export class LoyaltyRewardService {
   }
 
   async deleteReward(id: number) {
-    await prisma.loyalty_reward.delete({
+    await prisma.loyalty_rewards.delete({
       where: { id },
     });
     return { success: true };
@@ -92,12 +92,12 @@ export class LoyaltyRewardService {
       where.is_active = true;
     }
 
-    const packs = await prisma.loyalty_pack.findMany({
+    const packs = await prisma.loyalty_packs.findMany({
       where,
       include: {
-        products: {
+        loyalty_pack_products: {
           include: {
-            product: true,
+            products: true,  // ← la relación en la tabla intermedia se llama 'products'
           },
         },
       },
@@ -126,7 +126,7 @@ export class LoyaltyRewardService {
   }
 
   async createPack(data: any) {
-    const pack = await prisma.loyalty_pack.create({
+    const pack = await prisma.loyalty_packs.create({
       data: {
         name: data.name,
         description: data.description,
@@ -136,16 +136,16 @@ export class LoyaltyRewardService {
         max_quantity: data.maxQuantity,
         start_date: data.startDate,
         end_date: data.endDate,
-        products: {
+        loyalty_pack_products: {
           create: data.productIds.map((productId: number) => ({
             product_id: productId,
           })),
         },
       },
       include: {
-        products: {
+        loyalty_pack_products: {
           include: {
-            product: true,
+            products: true,
           },
         },
       },
@@ -275,12 +275,12 @@ export class LoyaltyRewardService {
         },
       },
       include: {
-        client: true,
-        reward: {
-          include: { product: true },
+        clients: true,
+        loyalty_rewards: {
+          include: { products: true },
         },
-        pack: true,
-      },
+        loyalty_packs: true,
+      }
     });
 
     const earnedPoints = transactions
@@ -331,10 +331,10 @@ export class LoyaltyRewardService {
         },
       },
       include: {
-        reward: {
-          include: { product: true },
+        loyalty_rewards: {
+          include: { products: true },
         },
-        pack: true,
+        loyalty_packs: true,
       },
     });
 

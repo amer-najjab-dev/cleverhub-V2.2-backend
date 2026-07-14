@@ -93,7 +93,7 @@ export class CampaignSegmentationService {
           some: {
             sale_items: {
               some: {
-                product: {
+                products: {
                   category: {
                     in: chronicKeywords,
                   },
@@ -124,7 +124,7 @@ export class CampaignSegmentationService {
       firstName: c.first_name,
       lastName: c.last_name,
       phone: c.phone,
-      lastPurchase: c.sales[0]?.created_at,
+      lastPurchase: (c as any).sales?.[0]?.created_at,
       segment: 'chronic',
     }));
   }
