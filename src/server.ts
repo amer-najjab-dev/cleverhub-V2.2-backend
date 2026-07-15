@@ -69,6 +69,21 @@ app.use(cors({
 }));
 
 app.use(express.json());
+// ==========================================
+// MIDDLEWARE CORS MANUAL (FORZADO)
+// ==========================================
+app.use((req, res, next) => {
+  // Permitir TODOS los orígenes (solo para diagnóstico)
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
 
 // ==========================================
 // 3. CONFIGURACIÓN DE SESIONES (PRODUCCIÓN)
