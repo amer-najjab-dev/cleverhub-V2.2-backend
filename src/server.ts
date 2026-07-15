@@ -61,12 +61,7 @@ const allowedOrigins = [
   /\.up\.railway\.app$/
 ];
 
-// CORS simplificado - permite todos los orígenes (solo para diagnóstico)
-app.use(cors({
-  origin: true,
-  credentials: true,
-  optionsSuccessStatus: 200
-}));
+
 
 app.use(express.json());
 // ==========================================
