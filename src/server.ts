@@ -57,6 +57,7 @@ const allowedOrigins = [
   'http://localhost:3000',
   'https://cleverhub-v2-frontend.vercel.app',
   'https://cleverhub-v2-2-frontend.vercel.app',
+  /^https:\/\/cleverhub-v2-2-frontend-.*\.vercel\.app$/,  // ← Añadir esta línea
   /\.up\.railway\.app$/
 ];
 
