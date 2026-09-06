@@ -46,39 +46,26 @@ const PORT = process.env.PORT || 5001;
 // ==========================================
 // 1. CONFIGURACIÓN DE RED Y PROXY (RENDER)
 // ==========================================
-app.set('trust proxy', 1); // Render usa proxies
+app.set('trust proxy', 1);
 
 // ==========================================
-// 2. CONFIGURACIÓN DE CORS (SIMPLIFICADA)
-// ==========================================
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:3000',
-  'https://cleverhub-v2-frontend.vercel.app',
-  'https://cleverhub-v2-2-frontend.vercel.app',
-  /^https:\/\/cleverhub-v2-2-frontend-.*\.vercel\.app$/,  // ← Añadir esta línea
-  /\.up\.railway\.app$/
-];
-
-
-
-app.use(express.json());
-// ==========================================
-// MIDDLEWARE CORS MANUAL (FORZADO)
+// 2. MIDDLEWARE CORS MANUAL (PRIMERO Y PRINCIPAL)
 // ==========================================
 app.use((req, res, next) => {
-  // Permitir TODOS los orígenes (solo para diagnóstico)
+  // Permitir TODOS los orígenes
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  // Añadir x-region a los headers permitidos
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-region');
   
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
   next();
 });
+
+app.use(express.json());
 
 // ==========================================
 // 3. CONFIGURACIÓN DE SESIONES (PRODUCCIÓN)
@@ -97,9 +84,9 @@ app.use(
     name: 'cleverhub.sid',
     cookie: {
       httpOnly: true,
-      secure: isProd, // true en producción (HTTPS)
-      maxAge: 1000 * 60 * 60 * 8, // 8 horas
-      sameSite: isProd ? 'none' : 'lax', // 'none' permite cross-site
+      secure: isProd,
+      maxAge: 1000 * 60 * 60 * 8,
+      sameSite: isProd ? 'none' : 'lax',
       path: '/',
     },
   })
@@ -118,7 +105,6 @@ app.use((req, res, next) => {
 // ==========================================
 console.log('🔄 Cargando rutas públicas...');
 
-// Ruta de salud (pública)
 app.get('/health', async (req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -135,7 +121,6 @@ app.get('/health', async (req, res) => {
   }
 });
 
-// Ruta raíz (pública)
 app.get('/', (req, res) => {
   res.json({ 
     message: 'CleverHub V2 Backend 🚀',
@@ -145,12 +130,10 @@ app.get('/', (req, res) => {
   });
 });
 
-// Rutas de autenticación (públicas)
 app.post('/api/auth/login', authController.login);
 app.post('/api/auth/logout', authController.logout);
 app.get('/api/admin/cron/check-expirations', superAdminController.runExpirationCheck);
 
-// Ruta para obtener usuario actual (requiere autenticación)
 app.get('/api/auth/me', requireAuth, async (req: any, res) => {
   try {
     const userId = req.user?.id;
@@ -203,10 +186,8 @@ app.get('/api/auth/me', requireAuth, async (req: any, res) => {
 // ==========================================
 console.log('🔄 Cargando rutas autenticadas...');
 
-// Importar rutas
 import routes from './routes';
 
-// Aplicar middleware de autenticación a todas las rutas bajo /api
 app.use(requireAuth, addPharmacyFilter, routes);
 
 // ==========================================
@@ -231,7 +212,6 @@ app.use((req, res) => {
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('❌ Error global:', err);
   
-  // Error de CORS
   if (err.message === 'No autorizado por CORS') {
     return res.status(403).json({ 
       success: false, 
@@ -239,7 +219,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     });
   }
   
-  // Error de autenticación
   if (err.message === 'No autorizado') {
     return res.status(401).json({ 
       success: false, 
@@ -247,7 +226,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     });
   }
   
-  // Error de base de datos
   if (err.code === 'P2002') {
     return res.status(409).json({ 
       success: false, 
@@ -256,7 +234,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     });
   }
   
-  // Error genérico
   res.status(500).json({ 
     success: false, 
     error: 'Error interno del servidor',
@@ -281,7 +258,6 @@ async function startServer() {
     app.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`🚀 Servidor en puerto: ${PORT}`);
       console.log(`🌍 Entorno: ${process.env.NODE_ENV}`);
-      console.log(`🔗 Frontend permitido: ${allowedOrigins.filter(o => typeof o === 'string').join(', ')}`);
       console.log(`🔐 Modo multi-tenant: Activado`);
     });
 
@@ -291,7 +267,6 @@ async function startServer() {
   }
 }
 
-// Manejo de señales de cierre
 process.on('SIGINT', async () => {
   console.log('🛑 Cerrando servidor...');
   await prisma.$disconnect();
