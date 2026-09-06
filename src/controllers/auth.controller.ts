@@ -61,6 +61,17 @@ export class AuthController {
   }
 
   async login(req: Request, res: Response) {
+    // Añadir headers CORS manualmente ANTES de cualquier lógica
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    
+    // Manejar preflight OPTIONS
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    
     try {
       const { email, password } = req.body;
 
